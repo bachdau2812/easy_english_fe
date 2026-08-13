@@ -28,14 +28,14 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ secrets.DOCKERHUB_USERNAME }}/vocab-backend:latest
-            ${{ secrets.DOCKERHUB_USERNAME }}/vocab-backend:${{ github.sha }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/vocab-frontend:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/vocab-frontend:${{ github.sha }}
 
       - name: Config SSH
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SERVER_SSH_KEY }}
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
-          SERVER_PORT: ${{ secrets.SERVER_PORT }}
+          SERVER_PORT: ${{ secrets.SERVER_PORT }}   
         run: |
           mkdir -p "$HOME/.ssh"
           chmod 700 "$HOME/.ssh"
