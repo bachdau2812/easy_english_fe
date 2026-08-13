@@ -29,8 +29,20 @@ export const authTokenStorage = {
   }
 };
 
-const buildUrl = (path: string, query?: Record<string, QueryValue>): string => {
-  const url = new URL(`${env.apiBaseUrl.replace(/\/$/, "")}/${path.replace(/^\//, "")}`);
+const buildUrl = (
+  path: string,
+  query?: Record<string, QueryValue>
+): string => {
+  const apiBaseUrl = env.apiBaseUrl.replace(/\/$/, "");
+  const normalizedPath = path.replace(/^\//, "");
+  const relativeUrl = `${apiBaseUrl}/${normalizedPath}`;
+
+  const url = new URL(
+    relativeUrl,
+    typeof window !== "undefined"
+      ? window.location.origin
+      : "http://localhost"
+  );
 
   Object.entries(query ?? {}).forEach(([key, value]) => {
     if (value !== null && value !== undefined && value !== "") {

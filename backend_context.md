@@ -32,7 +32,7 @@ Backend facts:
 | Local base URL | `http://localhost:8080/vocab-learning` |
 | Database | MySQL, database name `vocab_app` |
 | Cache | Redis |
-| Groq API key | `GROK_API_KEY` through `grok.api.key`; must be set in the environment of the running Spring Boot process before startup |
+| Groq API key | `GROQ_API_KEY` through `groq.api.key`; legacy `GROK_API_KEY` remains a fallback; must be set in the environment of the running Spring Boot process before startup |
 | Auth | JWT Bearer token, HS512 signed |
 | CORS | Only `http://localhost:5173`, credentials allowed |
 | Timezone config | `Asia/Ho_Chi_Minh` |
@@ -159,6 +159,7 @@ Error codes:
 | 2021 | `Lesson not found` | 404 |
 | 2022 | `Invalid lesson type` | 400 |
 | 2023 | `User vocabulary already exists`; current duplicate save messages are `wordId + senseId already exists` or `wordId + senseLocalizedId already exists` | 400 |
+| 2030 | `Invalid user vocabulary info type` | 400 |
 | 3001 | `Notification template not found` | 404 |
 | 3002 | `Unsupported notification method` | 400 |
 | 3003 | `Push token not found` | 404 |
@@ -348,6 +349,7 @@ MOCHI mapping:
 | GET | `/user-vocabularies/search-history` | Yes | `userId`, `page=0`, `limit=20` | `Page<UserSearchHistoryResponse>` | `USER_NOT_FOUND` | Sorted by newest search |
 | GET | `/user-vocabularies/attempts` | Yes | `userId`, `from`, `to`, `page=0`, `limit=20`, `type?` | `Page<UserVocabAttemptResponse>` | `USER_NOT_FOUND` | `from`/`to` are `YYYY-MM-DD`; type can be `VOCAB`, `QUIZ`, `LAT`, or prefix |
 | GET | `/user-vocabularies/by-level` | Yes | `userId`, `level`, `page=0`, `limit=20` | `Page<UserVocabularyResponse>` | `USER_NOT_FOUND` | Level should be 1-6; response includes `word` from `words.word` |
+| GET | `/user-vocabularies/info` | Yes | `userId`, `infoType` | `UserVocabularyInfoResponse` | `USER_NOT_FOUND`, `INVALID_USER_VOCABULARY_INFO_TYPE` | `VOCAB_QUANTITY` fills `totalQuantity` and all levels 1-6; `VOCAB_REVIEW` fills `reviewQuantity`; fields not used by the selected type are `null` |
 | GET | `/user-vocabularies/statistics/daily` | Yes | `userId` | `UserVocabularyStatisticResponse` | `USER_NOT_FOUND` | Derived from attempts for current backend date; omits `wrongCountVocab`; `correctUniqueVocab` excludes vocab that had any wrong attempt that day |
 | GET | `/user-vocabularies/statistics/overall` | Yes | `userId` | `UserVocabularyStatisticResponse` | `USER_NOT_FOUND` | `mostWrongVocabIds` uses threshold `> 5` wrong attempts; omits `correctUniqueVocab` and `wrongUniqueVocab`; keeps `wrongCountVocab` |
 | GET | `/user-vocabularies/{userVocabId}/word` | Yes | Path `userVocabId` | `WordResponse` | `USER_VOCABULARY_NOT_FOUND`, `WORD_NOT_FOUND` | Returns word detail filtered down to saved sense/localized sense |
@@ -408,10 +410,12 @@ These markers prevent repeating the same exercise type for the same word in the 
 
 Review quiz exhaustion behavior:
 
-- If all 5 vocab quiz types were already generated for the word in the current review window, `/exercises/vocab-review/word` returns an empty list.
+- If all available vocab quiz types were already generated for the word in the current review window, `/exercises/vocab-review/word` returns an empty list.
 - If 4 types were already generated and the only remaining type is a sound-based vocab quiz, but the word/session has no usable sound options, the backend marks that sound-based type as reviewed and returns an empty list.
 - In the normal batch endpoint `/exercises/vocab-review`, words that cannot produce a remaining valid quiz are skipped.
 - If a sound-based vocab quiz is selected and no usable sound choices exist, the backend marks that type in Redis and tries another available type for the same word.
+- Before quiz assembly, standard vocab senses are checked in one batch. Each `(wordId,senseId)` is brought to at least four distinct examples; only the deficit is requested from Groq. Generated English examples are stored with Vietnamese localizations (`langCode=vi`, `reviewStatus=1`). MOCHI/localized senses are not sent to Groq.
+- Groq generation is best-effort and does not fail the review endpoint. If `VOCAB_CHOOSE_WORD_IN_SENTENCE_BLANK`, `VOCAB_FILL_WORD_IN_SENTENCE_BLANK`, `VOCAB_SENTENCE_TO_MEANING`, or `VOCAB_SENTENCE_BLANK_TO_SOUND` still has no matching example, that type is marked reviewed and the backend tries another type.
 - Each returned review quiz includes `word`, `pos`, saved `sense`/`wordSense`, one preferred `sound`, and one `example` when available. Examples are matched to the saved vocabulary sense: MOCHI/localized vocab uses `senseLocalizedId` against `wordSenseLocalizationId`; normal vocab uses `senseId`.
 - `VOCAB_FILL_WORD_IN_SENTENCE_BLANK` now replaces the target word inside `sentence` with a hinted `maskedWord`; `metadata` maps hidden character indexes to their correct characters, same style as `VOCAB_FILL_MISSING_WORD_PART`.
 - For `VOCAB_MEANING_TO_SOUND`, `VOCAB_SENTENCE_TO_MEANING`, and `VOCAB_SENTENCE_BLANK_TO_SOUND`, `correctAnswer` is the string form of the correct key inside `metadata`; metadata keys are `1..4`.
@@ -747,6 +751,23 @@ export interface UserVocabularyResponse {
   nextReviewAt?: string | null;
   createdAt?: string | null;
   updatedAt?: string | null;
+}
+
+export type UserVocabularyInfoType =
+  | "VOCAB_QUANTITY"
+  | "VOCAB_REVIEW";
+
+export interface UserVocabularyLevelQuantityResponse {
+  level: number;
+  quantity: number;
+}
+
+export interface UserVocabularyInfoResponse {
+  userId: string;
+  infoType: UserVocabularyInfoType;
+  totalQuantity: number | null;
+  quantityByLevels: UserVocabularyLevelQuantityResponse[] | null;
+  reviewQuantity: number | null;
 }
 
 export interface UserVocabAttemptResponse {

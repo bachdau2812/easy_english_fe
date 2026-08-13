@@ -1,7 +1,5 @@
 ﻿import {
   type CSSProperties,
-  type FormEvent,
-  type PointerEvent as ReactPointerEvent,
   type RefObject,
   useEffect,
   useRef,
@@ -14,15 +12,12 @@ import { EmptyState } from "../../../shared/components/EmptyState";
 import { ErrorState } from "../../../shared/components/ErrorState";
 import { PageLoading } from "../../../shared/components/PageLoading";
 import { ROUTES } from "../../../shared/constants/routes";
-import { normalizeSearchText } from "../../../shared/utils/normalize";
 import { useAuth } from "../../auth/hooks/useAuth";
-import { dictionaryApi } from "../../dictionary/api/dictionaryApi";
-import { Word, WordResponse, WordSoundResponse } from "../../dictionary/types";
+import { WordResponse, WordSoundResponse } from "../../dictionary/types";
 import { HomeIcon } from "../../home/components/HomeIcon";
-import { HomeWordDetailModal } from "../../home/components/HomeWordDetailModal";
 import { LearningRouteChrome } from "../../home/components/LearningRouteChrome";
 import { searchApi } from "../../search/api/searchApi";
-import { useAutocomplete } from "../../search/hooks/useAutocomplete";
+import { FloatingVocabularyLookup } from "../../search/components/FloatingVocabularyLookup";
 import { IeltsReadingQuestion, IeltsReadingQuestionGroup, IeltsReadingSourceResponse } from "../types";
 import { readingApi } from "../api/readingApi";
 import {
@@ -1346,14 +1341,6 @@ export const IeltsReadingDetailPage = () => {
   const readingPanelRef = useRef<HTMLElement>(null);
   const readingContentBodyRef = useRef<HTMLDivElement>(null);
   const popupRef = useRef<HTMLDivElement>(null);
-  const readingSearchRef = useRef<HTMLFormElement>(null);
-  const readingSearchDragRef = useRef<{
-    moved: boolean;
-    originLeft: number;
-    originTop: number;
-    startX: number;
-    startY: number;
-  } | null>(null);
   const { sourceId } = useParams();
   const fallbackSources = useIeltsReadingSources(0, 100);
   const routeState = getDetailRouteState(location.state);
@@ -1364,18 +1351,12 @@ export const IeltsReadingDetailPage = () => {
   const contentBlocks = getFormattedReadingContentBlocks(source?.content);
   const [activeReadingWord, setActiveReadingWord] = useState<ActiveReadingWordPopup | null>(null);
   const [activeSenseIndex, setActiveSenseIndex] = useState(0);
-  const [isReadingSearchOpen, setIsReadingSearchOpen] = useState(false);
-  const [readingSearchPosition, setReadingSearchPosition] = useState({ left: 0, top: 0 });
-  const [hasMovedReadingSearch, setHasMovedReadingSearch] = useState(false);
-  const [readingSearchText, setReadingSearchText] = useState("");
-  const [readingSearchModalWord, setReadingSearchModalWord] = useState<WordResponse | null>(null);
   const [isReadingQuizOpen, setIsReadingQuizOpen] = useState(false);
   const [hasStartedReadingQuiz, setHasStartedReadingQuiz] = useState(false);
   const [readingQuizAnswers, setReadingQuizAnswers] = useState<ReadingQuizAnswers>({});
   const [isReadingQuizResultOpen, setIsReadingQuizResultOpen] = useState(false);
   const [isReadingQuizExitConfirmOpen, setIsReadingQuizExitConfirmOpen] = useState(false);
   const [readingQuizExitTarget, setReadingQuizExitTarget] = useState<"quiz" | "page">("quiz");
-  const readingAutocomplete = useAutocomplete(readingSearchText);
   const readingQuiz = useQuery({
     enabled: Boolean(isReadingQuizOpen && sourceId && auth.userId),
     queryKey: ["reading", "ielts", "quiz", sourceId, auth.userId],
@@ -1384,29 +1365,6 @@ export const IeltsReadingDetailPage = () => {
   const lookupReadingWord = useMutation({
     mutationFn: (word: string) => searchApi.fullSearch(word, "vi"),
     onSuccess: () => setActiveSenseIndex(0)
-  });
-  const searchReadingWordDetail = useMutation({
-    mutationFn: async ({ text, word }: { text?: string; word?: Word }) => {
-      if (word?.id) {
-        return dictionaryApi.getWordDetail({
-          wordId: word.id,
-          isTrans: true,
-          transLangCode: "vi",
-          userId: auth.userId
-        });
-      }
-
-      const lookupWord = normalizeSearchText(text ?? word?.normalizedWord ?? word?.word ?? "");
-
-      if (!lookupWord) {
-        throw new Error("Please enter a word to search.");
-      }
-
-      const words = await searchApi.fullSearch(lookupWord, "vi");
-      return getPrimaryReadingWord(words);
-    },
-    onMutate: () => setReadingSearchModalWord(null),
-    onSuccess: setReadingSearchModalWord
   });
   const popupWord = getPrimaryReadingWord(lookupReadingWord.data);
   const readingQuizGroups = getReadingQuizGroups(readingQuiz.data);
@@ -1477,75 +1435,6 @@ export const IeltsReadingDetailPage = () => {
     lookupReadingWord.mutate(lookupWord);
   };
 
-  const openReadingSearchWordPopup = (rawWord: string) => {
-    const lookupWord = normalizeSearchText(rawWord);
-
-    if (!lookupWord) {
-      return;
-    }
-
-    searchReadingWordDetail.mutate({ text: lookupWord });
-  };
-
-  const openReadingSearchSuggestion = (word: Word) => {
-    setReadingSearchText(word.word ?? word.normalizedWord ?? "");
-    searchReadingWordDetail.mutate({ word });
-  };
-
-  const handleReadingSearchSubmit = (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    openReadingSearchWordPopup(readingSearchText);
-  };
-
-  const handleReadingSearchPointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    if (isReadingSearchOpen || !readingSearchRef.current) {
-      return;
-    }
-
-    event.preventDefault();
-    const rect = readingSearchRef.current.getBoundingClientRect();
-    readingSearchDragRef.current = {
-      moved: false,
-      originLeft: rect.left,
-      originTop: rect.top,
-      startX: event.clientX,
-      startY: event.clientY
-    };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
-
-  const handleReadingSearchPointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    const dragState = readingSearchDragRef.current;
-
-    if (!dragState || isReadingSearchOpen) {
-      return;
-    }
-
-    const nextLeft = clamp(dragState.originLeft + event.clientX - dragState.startX, 12, window.innerWidth - 60);
-    const nextTop = clamp(dragState.originTop + event.clientY - dragState.startY, 12, window.innerHeight - 60);
-    const moved = Math.abs(event.clientX - dragState.startX) > 4 || Math.abs(event.clientY - dragState.startY) > 4;
-    readingSearchDragRef.current = { ...dragState, moved };
-    if (moved) {
-      setHasMovedReadingSearch(true);
-    }
-    setReadingSearchPosition({ left: nextLeft, top: nextTop });
-  };
-
-  const handleReadingSearchPointerUp = (event: ReactPointerEvent<HTMLButtonElement>) => {
-    const dragState = readingSearchDragRef.current;
-
-    if (!dragState || isReadingSearchOpen) {
-      return;
-    }
-
-    readingSearchDragRef.current = null;
-    event.currentTarget.releasePointerCapture(event.pointerId);
-
-    if (!dragState.moved) {
-      setIsReadingSearchOpen(true);
-    }
-  };
-
   const renderReadingParagraph = (text: string, blockIndex: number) =>
     getReadableWordParts(text).map((part, partIndex) =>
       READING_WORD_TOKEN_PATTERN.test(part) ? (
@@ -1561,47 +1450,11 @@ export const IeltsReadingDetailPage = () => {
         <span key={`${part}-${blockIndex}-${partIndex}`}>{part}</span>
       )
     );
-  const readingSearchWidth = isReadingSearchOpen ? 330 : 48;
-  const readingSearchStyle: CSSProperties =
-    typeof window === "undefined"
-      ? readingSearchPosition
-      : {
-          left: clamp(
-            readingSearchPosition.left || Math.max(12, window.innerWidth - 96),
-            12,
-            window.innerWidth - readingSearchWidth - 12
-          ),
-          top: clamp(readingSearchPosition.top || 118, 12, window.innerHeight - 60)
-        };
-
   useEffect(() => {
     if (source) {
       saveReadingSource(source);
     }
   }, [source]);
-
-  useEffect(() => {
-    if (hasMovedReadingSearch || typeof window === "undefined") {
-      return undefined;
-    }
-
-    const updateDefaultSearchPosition = () => {
-      const contentRect = readingContentBodyRef.current?.getBoundingClientRect();
-
-      if (!contentRect) {
-        return;
-      }
-
-      setReadingSearchPosition({
-        left: clamp(contentRect.right - 64, contentRect.left + 12, contentRect.right - 56),
-        top: clamp(contentRect.top + 18, contentRect.top + 12, contentRect.bottom - 56)
-      });
-    };
-
-    updateDefaultSearchPosition();
-    window.addEventListener("resize", updateDefaultSearchPosition);
-    return () => window.removeEventListener("resize", updateDefaultSearchPosition);
-  }, [hasMovedReadingSearch, isReadingQuizOpen, source]);
 
   useEffect(() => {
     if (!activeReadingWord) {
@@ -1660,65 +1513,12 @@ export const IeltsReadingDetailPage = () => {
             <span aria-hidden="true" />
           )}
         </header>
-        <form
-          className={`reading-focus-search ${isReadingSearchOpen ? "reading-focus-search--open" : ""}`}
-          onSubmit={handleReadingSearchSubmit}
-          ref={readingSearchRef}
-          style={readingSearchStyle}
-        >
-          <button
-            aria-label="Open reading word search"
-            className="reading-focus-search__icon"
-            onPointerDown={handleReadingSearchPointerDown}
-            onPointerMove={handleReadingSearchPointerMove}
-            onPointerUp={handleReadingSearchPointerUp}
-            type="button"
-          >
-            <HomeIcon name="search" size={19} />
-          </button>
-          <input
-            aria-label="Search word in reading"
-            onChange={(event) => setReadingSearchText(event.target.value)}
-            placeholder="Search word"
-            value={readingSearchText}
-          />
-          {isReadingSearchOpen ? (
-            <button
-              aria-label="Close reading word search"
-              className="reading-focus-search__close"
-              onClick={() => {
-                setIsReadingSearchOpen(false);
-                setReadingSearchText("");
-              }}
-              type="button"
-            >
-              <HomeIcon name="close" size={16} />
-            </button>
-          ) : null}
-          {isReadingSearchOpen && readingSearchText.trim() ? (
-            <div className="reading-focus-search__suggestions">
-              {readingAutocomplete.isLoading ? <p>Looking for matches...</p> : null}
-              {readingAutocomplete.error ? <p>{getSafeErrorMessage(readingAutocomplete.error)}</p> : null}
-              {!readingAutocomplete.isLoading && !readingAutocomplete.error && (readingAutocomplete.data ?? []).length === 0 ? (
-                <p>No suggestions yet.</p>
-              ) : null}
-              {!readingAutocomplete.isLoading && !readingAutocomplete.error
-                ? (readingAutocomplete.data ?? []).slice(0, 7).map((word) => (
-                    <button
-                      key={word.id ?? word.word ?? word.normalizedWord}
-                      onClick={() => {
-                        openReadingSearchSuggestion(word);
-                      }}
-                      type="button"
-                    >
-                      <span>{word.word ?? word.normalizedWord ?? "Untitled word"}</span>
-                      <small>{[word.pos, word.certLevel].filter(Boolean).join(" / ") || "Word"}</small>
-                    </button>
-                  ))
-                : null}
-            </div>
-          ) : null}
-        </form>
+        <FloatingVocabularyLookup
+          anchorRef={readingContentBodyRef}
+          languageCode="vi"
+          onRequireAuth={() => undefined}
+          userId={auth.userId}
+        />
 
         {!source && fallbackSources.isLoading ? <PageLoading label="Loading reading source..." /> : null}
         {!source && fallbackSources.isError ? (
@@ -1819,14 +1619,6 @@ export const IeltsReadingDetailPage = () => {
             word={popupWord}
           />
         ) : null}
-        <HomeWordDetailModal
-          onClose={() => {
-            setReadingSearchModalWord(null);
-            searchReadingWordDetail.reset();
-          }}
-          onRequireAuth={() => undefined}
-          word={readingSearchModalWord}
-        />
       </section>
       {isReadingQuizExitConfirmOpen ? (
         <div className="reading-quiz-exit-backdrop" role="presentation">

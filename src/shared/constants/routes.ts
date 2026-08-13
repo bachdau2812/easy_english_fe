@@ -1,5 +1,6 @@
 export const ROUTES = {
   home: "/",
+  learningCategory: (categoryKey = ":categoryKey") => `/categories/${categoryKey}`,
   login: "/login",
   register: "/register",
   forgotPassword: "/forgot-password",

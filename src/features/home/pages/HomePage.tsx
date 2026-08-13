@@ -3,9 +3,12 @@ import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { ApiError, getSafeErrorMessage } from "../../../shared/api/apiError";
 import { ROUTES } from "../../../shared/constants/routes";
+import { normalizeSearchText } from "../../../shared/utils/normalize";
 import { dictionaryApi } from "../../dictionary/api/dictionaryApi";
 import { Word, WordResponse } from "../../dictionary/types";
 import { searchApi } from "../../search/api/searchApi";
+import { selectFullSearchResults } from "../../search/api/searchParams";
+import { useRecordSearchHistory } from "../../search/hooks/useRecordSearchHistory";
 import { AccountModal } from "../components/AccountModal";
 import { AuthModal } from "../components/AuthModal";
 import { HomeFooter } from "../components/HomeFooter";
@@ -13,31 +16,41 @@ import { HomeHero } from "../components/HomeHero";
 import { HomeIcon } from "../components/HomeIcon";
 import { HomeNavbar } from "../components/HomeNavbar";
 import { HomeVocabularyExplorer, VocabularyExplorerMode } from "../components/HomeVocabularyExplorer";
-import { HomeWordResult } from "../components/HomeWordResult";
+import { HomeWordResults } from "../components/HomeWordResults";
 import { LearningSwitcher } from "../components/LearningSwitcher";
-import { useAuth } from "../../auth/hooks/useAuth";
 
 export const HomePage = () => {
-  const auth = useAuth();
   const navigate = useNavigate();
+  const recordSearchHistory = useRecordSearchHistory();
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isAccountOpen, setIsAccountOpen] = useState(false);
   const [languageCode, setLanguageCode] = useState("vi");
-  const [searchedWord, setSearchedWord] = useState<WordResponse | null>(null);
+  const [searchedWords, setSearchedWords] = useState<WordResponse[]>([]);
   const [hasSearched, setHasSearched] = useState(false);
   const [vocabularyMode, setVocabularyMode] = useState<VocabularyExplorerMode | null>(null);
 
   const searchWord = useMutation({
-    mutationFn: async ({ text, transLangCode }: { text: string; transLangCode: string }) => {
+    mutationFn: async ({
+      isUniqueSearch,
+      text,
+      transLangCode
+    }: {
+      isUniqueSearch: boolean;
+      text: string;
+      transLangCode: string;
+    }) => {
       const results = await searchApi.fullSearch(text, transLangCode);
-      return results[0] ?? null;
+      return selectFullSearchResults(results, isUniqueSearch);
     },
     onMutate: () => {
       setHasSearched(true);
       setVocabularyMode(null);
-      setSearchedWord(null);
+      setSearchedWords([]);
     },
-    onSuccess: (word) => setSearchedWord(word)
+    onSuccess: (words) => {
+      setSearchedWords(words);
+      recordSearchHistory(words);
+    }
   });
 
   const openWord = useMutation({
@@ -49,16 +62,18 @@ export const HomePage = () => {
       return dictionaryApi.getWordDetail({
         wordId: word.id,
         isTrans: true,
-        transLangCode,
-        userId: auth.userId
+        transLangCode
       });
     },
     onMutate: () => {
       setHasSearched(true);
       setVocabularyMode(null);
-      setSearchedWord(null);
+      setSearchedWords([]);
     },
-    onSuccess: (word) => setSearchedWord(word)
+    onSuccess: (word) => {
+      setSearchedWords([word]);
+      recordSearchHistory([word]);
+    }
   });
 
   const activeError = searchWord.error ?? openWord.error;
@@ -74,18 +89,27 @@ export const HomePage = () => {
           searchWord.reset();
           openWord.reset();
           setHasSearched(false);
-          setSearchedWord(null);
+          setSearchedWords([]);
           setVocabularyMode(null);
         }}
         onLanguageChange={setLanguageCode}
         onProfileOpen={() => setIsAccountOpen(true)}
-        onSearchSubmit={(text, nextLanguageCode) => {
+        onSearchSubmit={(text, nextLanguageCode, isUniqueSearch) => {
           setLanguageCode(nextLanguageCode);
-          searchWord.mutate({ text, transLangCode: nextLanguageCode });
+          searchWord.mutate({ text, transLangCode: nextLanguageCode, isUniqueSearch });
         }}
-        onSuggestionSelect={(word, nextLanguageCode) => {
+        onSuggestionSelect={(word, nextLanguageCode, isUniqueSearch) => {
           setLanguageCode(nextLanguageCode);
-          openWord.mutate({ word, transLangCode: nextLanguageCode });
+
+          if (isUniqueSearch) {
+            const text = normalizeSearchText(word.normalizedWord ?? word.word ?? "");
+
+            if (text) {
+              searchWord.mutate({ text, transLangCode: nextLanguageCode, isUniqueSearch: true });
+            }
+          } else {
+            openWord.mutate({ word, transLangCode: nextLanguageCode });
+          }
         }}
         onVocabularySelect={(mode) => {
           const nextRoute =
@@ -114,20 +138,20 @@ export const HomePage = () => {
                 <p>{isNotFound ? "Try another normalized English word." : getSafeErrorMessage(activeError)}</p>
               </section>
             ) : null}
-            {!isLoading && !activeError && !searchedWord ? (
+            {!isLoading && !activeError && searchedWords.length === 0 ? (
               <section className="home-word-empty">
                 <HomeIcon name="search" size={48} />
                 <h2>Word not found</h2>
                 <p>Try another spelling or pick a suggestion from the search box.</p>
               </section>
             ) : null}
-            {!isLoading && !activeError && searchedWord ? (
-              <HomeWordResult onRequireAuth={() => setIsAuthOpen(true)} word={searchedWord} />
+            {!isLoading && !activeError && searchedWords.length > 0 ? (
+              <HomeWordResults onRequireAuth={() => setIsAuthOpen(true)} words={searchedWords} />
             ) : null}
           </>
         ) : (
           <>
-            <HomeHero />
+            <HomeHero onCourseSelect={(key) => navigate(ROUTES.learningCategory(key))} />
             {vocabularyMode ? (
               <HomeVocabularyExplorer
                 mode={vocabularyMode}

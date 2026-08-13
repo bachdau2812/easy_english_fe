@@ -3,7 +3,9 @@ import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { getSafeErrorMessage } from "../../../shared/api/apiError";
 import { AuthRequiredNotice } from "../../../shared/components/AuthRequiredNotice";
+import { queryKeys } from "../../../shared/constants/queryKeys";
 import { ROUTES } from "../../../shared/constants/routes";
+import { normalizeSearchText } from "../../../shared/utils/normalize";
 import { AccountModal } from "../../home/components/AccountModal";
 import { AuthModal } from "../../home/components/AuthModal";
 import { HomeIcon } from "../../home/components/HomeIcon";
@@ -13,11 +15,32 @@ import { useAuth } from "../../auth/hooks/useAuth";
 import { dictionaryApi } from "../../dictionary/api/dictionaryApi";
 import { Category, Word, WordResponse } from "../../dictionary/types";
 import { searchApi } from "../../search/api/searchApi";
+import { selectFullSearchResults } from "../../search/api/searchParams";
+import { useRecordSearchHistory } from "../../search/hooks/useRecordSearchHistory";
 import { statisticsApi } from "../../statistics/api/statisticsApi";
 import { UserVocabularyStatisticResponse, WrongVocabResponse } from "../../statistics/types";
 import { reviewApi } from "../../review/api/reviewApi";
+import {
+  getPlainReviewSentence,
+  getReviewMeaningPresentation,
+  getReviewResultExamplePresentation,
+  getReviewResultSoundUrl,
+  parseReviewSentenceMarkup,
+  shouldIgnoreReviewResultEnter,
+  splitReviewInlineFocus
+} from "../../review/reviewPresentation";
+import { appendGeneratedReviewQuestionForSession } from "../../review/reviewQueue";
+import {
+  getReviewPreloadUrls,
+  ReviewAudioPool
+} from "../../review/reviewAudio";
 import { UserVocabAttemptResponse, VocabReviewQuizResponse } from "../../review/types";
+import { FloatingVocabularyLookup } from "../../search/components/FloatingVocabularyLookup";
 import { vocabularyApi } from "../api/vocabularyApi";
+import {
+  canReuseSavedVocabularyPage,
+  normalizeVocabularyLevelQuantities
+} from "../vocabularyInfo";
 
 type VocabularyExploreMode = "levels" | "mine" | "topics";
 
@@ -26,11 +49,10 @@ interface VocabularyExplorePageProps {
 }
 
 const certLevels = ["A1", "A2", "B1", "B2", "C1", "C2"];
-const savedLevels = [1, 2, 3, 4, 5, 6];
 type MyVocabularySection = "daily" | "list" | "overall" | "review";
 type ReviewVocabTotal = 30 | 60 | 90;
 
-const MOCHI_AUDIO_PREFIX = "https://mochien-server.mochidemy.com/audios/question/";
+const SAVED_VOCABULARY_PAGE_SIZE = 20;
 const reviewVocabTotalOptions: ReviewVocabTotal[] = [30, 60, 90];
 const reviewReminderTotalOptions = Array.from({ length: 61 }, (_, index) => index + 30);
 
@@ -123,27 +145,6 @@ const normalizeReviewAnswer = (value?: string | null) =>
 const getFirstText = (...values: Array<string | null | undefined>) =>
   values.find((value) => Boolean(value?.trim()))?.trim() ?? null;
 
-const isReviewQuestion = (value: unknown): value is VocabReviewQuizResponse =>
-  Boolean(value && typeof value === "object" && !Array.isArray(value) && "exerciseType" in value);
-
-const pickGeneratedReviewQuestion = (value: unknown): VocabReviewQuizResponse | null => {
-  if (Array.isArray(value)) {
-    return value.find(isReviewQuestion) ?? null;
-  }
-
-  return isReviewQuestion(value) ? value : null;
-};
-
-const buildReviewAudioUrl = (audioUrl?: string | null) => {
-  if (!audioUrl) {
-    return null;
-  }
-
-  return audioUrl.startsWith("https://") || audioUrl.startsWith("http://")
-    ? audioUrl
-    : `${MOCHI_AUDIO_PREFIX}${audioUrl}`;
-};
-
 const getReviewQuestionWord = (question: VocabReviewQuizResponse) =>
   getFirstText(question.word, question.sense?.word, question.example?.word, question.correctAnswer) ?? "Review word";
 
@@ -164,8 +165,16 @@ const getReviewQuestionMeaning = (question: VocabReviewQuizResponse) =>
     question.example?.trans
   ) ?? "No meaning was returned.";
 
-const getReviewSoundUrl = (question: VocabReviewQuizResponse) =>
-  getFirstText(question.sound?.mp3Url, question.sound?.oggUrl, question.audioUrl);
+const renderReviewSentence = (sentence?: string | null) =>
+  parseReviewSentenceMarkup(sentence).map((segment, index) =>
+    segment.type === "highlight" ? (
+      <mark className="vocab-review-highlight" key={`highlight-${index}`}>
+        {segment.text}
+      </mark>
+    ) : (
+      <span key={`text-${index}`}>{segment.text}</span>
+    )
+  );
 
 const getReviewMetadataOptions = (metadata?: Record<number, string> | null) =>
   Object.entries(metadata ?? {})
@@ -179,30 +188,6 @@ const buildReviewSummaryItem = (question: VocabReviewQuizResponse): ReviewSummar
   pos: getReviewQuestionPos(question),
   word: getReviewQuestionWord(question)
 });
-
-const buildCompletedReviewSentence = (
-  sentence?: string | null,
-  correctAnswer?: string | null,
-  hiddenAnswer?: string | null
-) => {
-  const cleanSentence = sentence?.trim();
-  const cleanAnswer = correctAnswer?.trim();
-  const cleanHiddenAnswer = hiddenAnswer?.trim();
-
-  if (!cleanSentence || (!cleanAnswer && !cleanHiddenAnswer)) {
-    return cleanSentence ?? null;
-  }
-
-  const fillAnswer = cleanHiddenAnswer || cleanAnswer || "";
-
-  if (cleanSentence.includes("_")) {
-    let answerIndex = 0;
-
-    return cleanSentence.replace(/_/g, () => fillAnswer[answerIndex++] ?? "");
-  }
-
-  return cleanSentence.replace(REVIEW_NAMED_BLANK_PATTERN, cleanAnswer ?? fillAnswer);
-};
 
 const getReviewMetadataExpectedAnswer = (metadata?: Record<number, string> | null) => {
   const entries = Object.entries(metadata ?? {})
@@ -327,6 +312,7 @@ const InlineReviewAnswer = ({
   className = "",
   correctAnswer,
   disabled,
+  maskedWord,
   onChange,
   onSubmit,
   text,
@@ -336,6 +322,7 @@ const InlineReviewAnswer = ({
   className?: string;
   correctAnswer?: string | null;
   disabled: boolean;
+  maskedWord?: string | null;
   onChange: (value: string) => void;
   onSubmit: () => void;
   text: string;
@@ -344,6 +331,7 @@ const InlineReviewAnswer = ({
   const fallbackBlankLength = correctAnswer?.trim().length ?? 0;
   const blankLength = getReviewAnswerLength(text, fallbackBlankLength);
   const inlineParts = buildReviewInlineParts(text, fallbackBlankLength);
+  const inlineFocus = splitReviewInlineFocus(text, maskedWord);
   const safeValue = value.slice(0, blankLength);
   const activeSlotIndex = Math.min(safeValue.length, Math.max(blankLength - 1, 0));
   const slotRefs = useRef<Array<HTMLInputElement | null>>([]);
@@ -443,26 +431,43 @@ const InlineReviewAnswer = ({
 
   let consumedBlankCount = 0;
 
-  return (
-    <div className={`vocab-review-inline-fill ${className}`} aria-label={ariaLabel} role="group">
-      {inlineParts.map((part, partIndex) => {
-        if (part.type === "text") {
-          return (
-            <span className="vocab-review-inline-fill__text" key={`text-${partIndex}`}>
-              {part.text}
-            </span>
-          );
-        }
-
-        const startIndex = consumedBlankCount;
-        consumedBlankCount += part.length;
-
+  const renderInlineParts = (parts: ReviewInlinePart[], keyPrefix: string) =>
+    parts.map((part, partIndex) => {
+      if (part.type === "text") {
         return (
-          <span className="vocab-review-slot-input" key={`blank-${partIndex}`}>
-            {Array.from({ length: part.length }, (_, slotIndex) => renderSlotInput(startIndex + slotIndex))}
+          <span className="vocab-review-inline-fill__text" key={`${keyPrefix}-text-${partIndex}`}>
+            {part.text}
           </span>
         );
-      })}
+      }
+
+      const startIndex = consumedBlankCount;
+      consumedBlankCount += part.length;
+
+      return (
+        <span className="vocab-review-slot-input" key={`${keyPrefix}-blank-${partIndex}`}>
+          {Array.from({ length: part.length }, (_, slotIndex) => renderSlotInput(startIndex + slotIndex))}
+        </span>
+      );
+    });
+
+  return (
+    <div className={`vocab-review-inline-fill ${className}`} aria-label={ariaLabel} role="group">
+      {inlineFocus.focus ? (
+        <>
+          {inlineFocus.before ? (
+            <span className="vocab-review-inline-fill__text">{inlineFocus.before}</span>
+          ) : null}
+          <span className="vocab-review-inline-fill__word">
+            {renderInlineParts(buildReviewInlineParts(inlineFocus.focus, fallbackBlankLength), "focus")}
+          </span>
+          {inlineFocus.after ? (
+            <span className="vocab-review-inline-fill__text">{inlineFocus.after}</span>
+          ) : null}
+        </>
+      ) : (
+        renderInlineParts(inlineParts, "sentence")
+      )}
     </div>
   );
 };
@@ -527,12 +532,12 @@ const iconCycle: Array<"book" | "brain" | "globe" | "headphones" | "reading" | "
 ];
 
 const ExploreChrome = ({ children, compactTitle }: { children: ReactNode; compactTitle?: string }) => {
-  const auth = useAuth();
   const navigate = useNavigate();
+  const recordSearchHistory = useRecordSearchHistory();
   const [isAccountOpen, setIsAccountOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [languageCode, setLanguageCode] = useState("vi");
-  const [modalWord, setModalWord] = useState<WordResponse | null>(null);
+  const [modalWords, setModalWords] = useState<WordResponse[]>([]);
   const [wordError, setWordError] = useState<string | null>(null);
 
   const openWord = useMutation({
@@ -544,24 +549,35 @@ const ExploreChrome = ({ children, compactTitle }: { children: ReactNode; compac
       return dictionaryApi.getWordDetail({
         wordId: word.id,
         isTrans: true,
-        transLangCode,
-        userId: auth.userId
+        transLangCode
       });
     },
     onMutate: () => setWordError(null),
-    onSuccess: setModalWord,
+    onSuccess: (word) => {
+      setModalWords([word]);
+      recordSearchHistory([word]);
+    },
     onError: (error) => setWordError(getSafeErrorMessage(error))
   });
 
   const searchWord = useMutation({
-    mutationFn: async ({ text, transLangCode }: { text: string; transLangCode: string }) => {
+    mutationFn: async ({
+      isUniqueSearch,
+      text,
+      transLangCode
+    }: {
+      isUniqueSearch: boolean;
+      text: string;
+      transLangCode: string;
+    }) => {
       const results = await searchApi.fullSearch(text, transLangCode);
-      return results[0] ?? null;
+      return selectFullSearchResults(results, isUniqueSearch);
     },
     onMutate: () => setWordError(null),
-    onSuccess: (word) => {
-      if (word) {
-        setModalWord(word);
+    onSuccess: (words) => {
+      if (words.length > 0) {
+        setModalWords(words);
+        recordSearchHistory(words);
       } else {
         setWordError("Word not found.");
       }
@@ -576,13 +592,22 @@ const ExploreChrome = ({ children, compactTitle }: { children: ReactNode; compac
         onAuthOpen={() => setIsAuthOpen(true)}
         onLanguageChange={setLanguageCode}
         onProfileOpen={() => setIsAccountOpen(true)}
-        onSearchSubmit={(text, nextLanguageCode) => {
+        onSearchSubmit={(text, nextLanguageCode, isUniqueSearch) => {
           setLanguageCode(nextLanguageCode);
-          searchWord.mutate({ text, transLangCode: nextLanguageCode });
+          searchWord.mutate({ text, transLangCode: nextLanguageCode, isUniqueSearch });
         }}
-        onSuggestionSelect={(word, nextLanguageCode) => {
+        onSuggestionSelect={(word, nextLanguageCode, isUniqueSearch) => {
           setLanguageCode(nextLanguageCode);
-          openWord.mutate({ word, transLangCode: nextLanguageCode });
+
+          if (isUniqueSearch) {
+            const text = normalizeSearchText(word.normalizedWord ?? word.word ?? "");
+
+            if (text) {
+              searchWord.mutate({ text, transLangCode: nextLanguageCode, isUniqueSearch: true });
+            }
+          } else {
+            openWord.mutate({ word, transLangCode: nextLanguageCode });
+          }
         }}
         onVocabularySelect={(nextMode) => {
           navigate(
@@ -605,9 +630,9 @@ const ExploreChrome = ({ children, compactTitle }: { children: ReactNode; compac
       <AuthModal isOpen={isAuthOpen} onClose={() => setIsAuthOpen(false)} />
       <AccountModal isOpen={isAccountOpen} onClose={() => setIsAccountOpen(false)} />
       <HomeWordDetailModal
-        onClose={() => setModalWord(null)}
+        onClose={() => setModalWords([])}
         onRequireAuth={() => setIsAuthOpen(true)}
-        word={modalWord}
+        words={modalWords}
       />
     </div>
   );
@@ -1009,7 +1034,8 @@ const LevelWordBrowser = () => {
 const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolean) => void }) => {
   const auth = useAuth();
   const [activeSection, setActiveSection] = useState<MyVocabularySection | null>(null);
-  const [activeSavedLevel, setActiveSavedLevel] = useState(1);
+  const [selectedSavedLevel, setSelectedSavedLevel] = useState<number | null>(null);
+  const [savedPage, setSavedPage] = useState(0);
   const [savedModalWord, setSavedModalWord] = useState<WordResponse | null>(null);
   const [reviewMessage, setReviewMessage] = useState<string | null>(null);
   const [reviewQuestions, setReviewQuestions] = useState<VocabReviewQuizResponse[]>([]);
@@ -1022,7 +1048,7 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
     correct: ReviewSummaryItem[];
     wrong: ReviewSummaryItem[];
   }>({ correct: [], wrong: [] });
-  const [isReviewDefinitionOpen, setIsReviewDefinitionOpen] = useState(false);
+  const [isReviewEnglishMeaningOpen, setIsReviewEnglishMeaningOpen] = useState(false);
   const [isReviewExampleTransOpen, setIsReviewExampleTransOpen] = useState(false);
   const [isReviewMoreExampleOpen, setIsReviewMoreExampleOpen] = useState(false);
   const [isReviewSentenceMeaningOpen, setIsReviewSentenceMeaningOpen] = useState(false);
@@ -1036,12 +1062,23 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
   const isAdvancingReviewRef = useRef(false);
   const isSubmittingReviewRef = useRef(false);
   const isReviewScreenOpenRef = useRef(false);
+  const lastAutoPlayedReviewPopupRef = useRef<ReviewResultPopupState | null>(null);
+  const reviewAudioPoolRef = useRef<ReviewAudioPool | null>(null);
   const reviewRequestIdRef = useRef(0);
+  const reviewScreenRef = useRef<HTMLDivElement>(null);
+  if (!reviewAudioPoolRef.current && typeof Audio !== "undefined") {
+    reviewAudioPoolRef.current = new ReviewAudioPool((url) => new Audio(url));
+  }
 
   const setReviewScreenOpen = (nextOpen: boolean) => {
     isReviewScreenOpenRef.current = nextOpen;
     setIsReviewScreenOpenState(nextOpen);
   };
+
+  useEffect(() => {
+    setSelectedSavedLevel(null);
+    setSavedPage(0);
+  }, [auth.userId]);
 
   const daily = useQuery({
     enabled: Boolean(auth.userId && activeSection === "daily"),
@@ -1053,14 +1090,48 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
     queryKey: ["vocabulary-route", "overall-stat", auth.userId],
     queryFn: () => statisticsApi.getOverall(auth.userId as string)
   });
-  const saved = useQuery({
+  const vocabularyQuantity = useQuery({
     enabled: Boolean(auth.userId && activeSection === "list"),
-    queryKey: ["vocabulary-route", "saved-by-level", auth.userId, activeSavedLevel],
+    queryKey: queryKeys.vocabularyInfo(auth.userId, "VOCAB_QUANTITY"),
+    queryFn: () =>
+      vocabularyApi.getVocabularyInfo({
+        userId: auth.userId as string,
+        infoType: "VOCAB_QUANTITY"
+      })
+  });
+  const saved = useQuery({
+    enabled: Boolean(
+      auth.userId && activeSection === "list" && selectedSavedLevel !== null
+    ),
+    queryKey: queryKeys.savedVocabularies(
+      auth.userId,
+      selectedSavedLevel ?? undefined,
+      savedPage,
+      SAVED_VOCABULARY_PAGE_SIZE
+    ),
     queryFn: () =>
       vocabularyApi.getSavedVocabulariesByLevel({
         userId: auth.userId as string,
-        level: activeSavedLevel,
-        limit: 20
+        level: selectedSavedLevel as number,
+        page: savedPage,
+        limit: SAVED_VOCABULARY_PAGE_SIZE
+      }),
+    placeholderData: (previousData, previousQuery) =>
+      canReuseSavedVocabularyPage(previousQuery?.queryKey, {
+        userId: auth.userId,
+        level: selectedSavedLevel,
+        limit: SAVED_VOCABULARY_PAGE_SIZE
+      })
+        ? previousData
+        : undefined
+  });
+  const reviewQuantity = useQuery({
+    enabled: Boolean(auth.userId && activeSection === "review"),
+    queryKey: queryKeys.vocabularyInfo(auth.userId, "VOCAB_REVIEW"),
+    queryFn: () =>
+      vocabularyApi.getVocabularyInfo({
+        userId: auth.userId as string,
+        infoType: "VOCAB_REVIEW"
       })
   });
   const review = useMutation({
@@ -1077,7 +1148,7 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
       setReviewAttemptResult(null);
       setReviewResultPopup(null);
       setReviewSummaryItems({ correct: [], wrong: [] });
-      setIsReviewDefinitionOpen(false);
+      setIsReviewEnglishMeaningOpen(false);
       setIsReviewExampleTransOpen(false);
       setIsReviewMoreExampleOpen(false);
       setIsReviewSentenceMeaningOpen(false);
@@ -1110,7 +1181,7 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
         setReviewAttemptResult(null);
         setReviewResultPopup(null);
         setReviewSummaryItems({ correct: [], wrong: [] });
-        setIsReviewDefinitionOpen(false);
+        setIsReviewEnglishMeaningOpen(false);
         setIsReviewExampleTransOpen(false);
         setIsReviewMoreExampleOpen(false);
         setIsReviewSentenceMeaningOpen(false);
@@ -1127,7 +1198,7 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
       setReviewAttemptResult(null);
       setReviewResultPopup(null);
       setReviewSummaryItems({ correct: [], wrong: [] });
-      setIsReviewDefinitionOpen(false);
+      setIsReviewEnglishMeaningOpen(false);
       setIsReviewExampleTransOpen(false);
       setIsReviewMoreExampleOpen(false);
       setIsReviewSentenceMeaningOpen(false);
@@ -1208,7 +1279,7 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
       });
       setReviewAttemptResult(resolvedAttempt);
       setReviewResultPopup({ attempt: resolvedAttempt, question: variables.question });
-      setIsReviewDefinitionOpen(false);
+      setIsReviewEnglishMeaningOpen(false);
       setIsReviewExampleTransOpen(false);
       setIsReviewMoreExampleOpen(false);
       setReviewMessage(resolvedAttempt.correct ? "Correct answer." : "Not quite. Review the answer and continue.");
@@ -1226,7 +1297,14 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
   const activeStatistic = activeSection === "daily" ? daily.data : activeSection === "overall" ? overall.data : null;
   const activeStatisticError = activeSection === "daily" ? daily.error : activeSection === "overall" ? overall.error : null;
   const activeSectionDetails = myVocabularySections.find((section) => section.key === activeSection) ?? null;
+  const vocabularyLevelQuantities = normalizeVocabularyLevelQuantities(
+    vocabularyQuantity.data?.quantityByLevels
+  );
+  const selectedSavedLevelQuantity = vocabularyLevelQuantities.find(
+    (item) => item.level === selectedSavedLevel
+  )?.quantity ?? 0;
   const currentReviewQuestion = reviewQuestions[reviewIndex] ?? null;
+  const nextReviewQuestion = reviewQuestions[reviewIndex + 1] ?? null;
   const currentReviewType =
     currentReviewQuestion?.exerciseType && currentReviewQuestion.exerciseType !== "LAT_LISTEN_AND_TYPE"
       ? currentReviewQuestion.exerciseType
@@ -1271,56 +1349,30 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
       )
     : null;
   const reviewResultPos = reviewResultPopup ? getReviewQuestionPos(reviewResultPopup.question) : null;
-  const reviewResultSoundUrl = reviewResultPopup ? getReviewSoundUrl(reviewResultPopup.question) : null;
+  const reviewResultSoundUrl = reviewResultPopup
+    ? getReviewResultSoundUrl(reviewResultPopup.question)
+    : null;
   const reviewResultIpa = reviewResultPopup
     ? getFirstText(reviewResultPopup.question.sound?.ipa, reviewResultPopup.question.sound?.enpr)
     : null;
-  const reviewResultShortMeaning = reviewResultPopup
-    ? getFirstText(
-        reviewResultPopup.question.sense?.shortMeaning,
-        reviewResultPopup.question.sense?.trans?.shortMeaning
-      )
+  const reviewResultMeaningPresentation = reviewResultPopup
+    ? getReviewMeaningPresentation(reviewResultPopup.question)
     : null;
-  const reviewResultDefinition = reviewResultPopup
-    ? getFirstText(
-        reviewResultPopup.question.sense?.definition,
-        reviewResultPopup.question.sense?.trans?.definition
-      )
-    : null;
-  const reviewResultMeaning = reviewResultShortMeaning ?? reviewResultDefinition ?? "No meaning was returned.";
-  const isReviewResultSentenceQuestion = Boolean(
-    reviewResultPopup?.question.exerciseType === "VOCAB_CHOOSE_WORD_IN_SENTENCE_BLANK" ||
-    reviewResultPopup?.question.exerciseType === "VOCAB_FILL_WORD_IN_SENTENCE_BLANK"
+  const reviewResultEnglishMeaning = reviewResultMeaningPresentation?.englishMeaning ?? null;
+  const reviewResultVietnameseMeaning = reviewResultMeaningPresentation?.vietnameseMeaning ?? null;
+  const reviewResultPrimaryMeaning = reviewResultVietnameseMeaning ?? reviewResultEnglishMeaning;
+  const canToggleReviewEnglishMeaning = Boolean(
+    reviewResultVietnameseMeaning && reviewResultEnglishMeaning
   );
-  const reviewResultQuestionSentence = reviewResultPopup
-    ? getFirstText(
-        buildCompletedReviewSentence(
-          reviewResultPopup.question.sentence,
-          reviewResultPopup.question.correctAnswer,
-          getReviewMetadataExpectedAnswer(reviewResultPopup.question.metadata)
-        )
-      )
+  const reviewResultExamplePresentation = reviewResultPopup
+    ? getReviewResultExamplePresentation(reviewResultPopup.question)
     : null;
-  const reviewResultQuestionSentenceTrans = reviewResultPopup
-    ? getFirstText(reviewResultPopup.question.trans)
-    : null;
-  const reviewResultExtraExample = reviewResultPopup
-    ? getFirstText(reviewResultPopup.question.example?.sentence)
-    : null;
-  const reviewResultExtraExampleTrans = reviewResultPopup
-    ? getFirstText(reviewResultPopup.question.example?.trans)
-    : null;
-  const hasDifferentReviewResultExtraExample = Boolean(
-    reviewResultExtraExample &&
-    normalizeReviewAnswer(reviewResultExtraExample) !== normalizeReviewAnswer(reviewResultQuestionSentence)
-  );
-  const reviewResultExample = isReviewResultSentenceQuestion
-    ? reviewResultQuestionSentence ?? reviewResultExtraExample
-    : reviewResultExtraExample ?? reviewResultQuestionSentence;
-  const reviewResultExampleTrans = isReviewResultSentenceQuestion
-    ? reviewResultQuestionSentenceTrans ?? reviewResultExtraExampleTrans
-    : reviewResultExtraExampleTrans ?? reviewResultQuestionSentenceTrans;
-  const canExpandReviewDefinition = Boolean(reviewResultShortMeaning && reviewResultDefinition);
+  const isReviewResultSentenceQuestion = reviewResultExamplePresentation?.isCompletedSentence ?? false;
+  const reviewResultExample = reviewResultExamplePresentation?.sentence ?? null;
+  const reviewResultExampleTrans = reviewResultExamplePresentation?.translation ?? null;
+  const reviewResultExtraExample = reviewResultExamplePresentation?.extraSentence ?? null;
+  const reviewResultExtraExampleTrans = reviewResultExamplePresentation?.extraTranslation ?? null;
+  const hasDifferentReviewResultExtraExample = Boolean(reviewResultExtraExample);
   const currentReviewSentenceMeaning = currentReviewQuestion
     ? getFirstText(currentReviewQuestion.trans, currentReviewQuestion.example?.trans)
     : null;
@@ -1333,6 +1385,38 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
 
     return () => onActiveChange(false);
   }, [activeSection, onActiveChange]);
+
+  useEffect(() => {
+    reviewAudioPoolRef.current?.preload(
+      getReviewPreloadUrls([
+        currentReviewQuestion,
+        nextReviewQuestion,
+        reviewResultPopup?.question
+      ])
+    );
+  }, [currentReviewQuestion, nextReviewQuestion, reviewResultPopup]);
+
+  useEffect(() => {
+    if (!reviewResultPopup || !reviewResultSoundUrl) {
+      reviewAudioPoolRef.current?.stop();
+      lastAutoPlayedReviewPopupRef.current = null;
+      return;
+    }
+
+    if (lastAutoPlayedReviewPopupRef.current === reviewResultPopup) {
+      return;
+    }
+
+    lastAutoPlayedReviewPopupRef.current = reviewResultPopup;
+    void reviewAudioPoolRef.current?.play(reviewResultSoundUrl);
+  }, [reviewResultPopup, reviewResultSoundUrl]);
+
+  useEffect(
+    () => () => {
+      reviewAudioPoolRef.current?.clear();
+    },
+    []
+  );
 
   const canSubmitReviewAnswer = Boolean(
     reviewAnswer.trim() && hasCompletedFillAnswer && !reviewAttemptResult && !submitReviewAttempt.isPending
@@ -1354,24 +1438,8 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
     });
   };
 
-  const goToNextReviewQuestion = ({
-    extraQuestion,
-    removeCurrentQuestion = false
-  }: {
-    extraQuestion?: VocabReviewQuizResponse | null;
-    removeCurrentQuestion?: boolean;
-  } = {}) => {
-    const questionToAppend = extraQuestion ?? null;
-    const questionsAfterCurrentAction = removeCurrentQuestion
-      ? reviewQuestions.filter((_, index) => index !== reviewIndex)
-      : reviewQuestions;
-    const nextQuestions = questionToAppend
-      ? [...questionsAfterCurrentAction, questionToAppend]
-      : questionsAfterCurrentAction;
-    const nextIndex = removeCurrentQuestion ? reviewIndex : reviewIndex + 1;
-
-    setReviewQuestions(nextQuestions);
-    setReviewIndex(Math.min(nextIndex, nextQuestions.length));
+  const goToNextReviewQuestion = () => {
+    setReviewIndex(Math.min(reviewIndex + 1, reviewQuestions.length));
     setReviewAnswer("");
     setReviewReplayCount(0);
     setReviewAttemptResult(null);
@@ -1389,32 +1457,48 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
 
     isAdvancingReviewRef.current = true;
     setReviewResultPopup(null);
-    setIsReviewDefinitionOpen(false);
+    setIsReviewEnglishMeaningOpen(false);
     setIsReviewExampleTransOpen(false);
     setIsReviewMoreExampleOpen(false);
 
     if (popup?.attempt.correct === false && popup.question.userVocabId) {
-      generateWrongReviewQuestion.mutate(popup.question, {
-        onError: () => goToNextReviewQuestion({ removeCurrentQuestion: true }),
-        onSuccess: (response) =>
-          goToNextReviewQuestion({
-            extraQuestion: pickGeneratedReviewQuestion(response),
-            removeCurrentQuestion: true
-          })
-      });
-      return;
+      const requestId = reviewRequestIdRef.current;
+
+      void generateWrongReviewQuestion
+        .mutateAsync(popup.question)
+        .then((response) => {
+          setReviewQuestions((current) =>
+            appendGeneratedReviewQuestionForSession(current, response, {
+              activeRequestId: reviewRequestIdRef.current,
+              isOpen: isReviewScreenOpenRef.current,
+              requestId
+            })
+          );
+        })
+        .catch(() => undefined);
     }
 
     goToNextReviewQuestion();
   };
 
   useEffect(() => {
-    if (!reviewResultPopup || generateWrongReviewQuestion.isPending) {
+    if (!reviewResultPopup) {
       return;
     }
 
     const closeResultOnEnter = (event: KeyboardEvent) => {
       if (event.key !== "Enter") {
+        return;
+      }
+
+      const target = event.target;
+      const hasInteractiveTarget =
+        target instanceof HTMLElement &&
+        Boolean(
+          target.closest("input, textarea, select, button, form, [contenteditable='true']")
+        );
+
+      if (shouldIgnoreReviewResultEnter(event.defaultPrevented, hasInteractiveTarget)) {
         return;
       }
 
@@ -1425,7 +1509,7 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
     window.addEventListener("keydown", closeResultOnEnter);
 
     return () => window.removeEventListener("keydown", closeResultOnEnter);
-  }, [generateWrongReviewQuestion.isPending, reviewResultPopup]);
+  }, [reviewResultPopup]);
 
   const exitReviewSession = () => {
     reviewRequestIdRef.current += 1;
@@ -1438,7 +1522,7 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
     setReviewResultPopup(null);
     setReviewSummaryItems({ correct: [], wrong: [] });
     setReviewMessage(null);
-    setIsReviewDefinitionOpen(false);
+    setIsReviewEnglishMeaningOpen(false);
     setIsReviewExampleTransOpen(false);
     setIsReviewMoreExampleOpen(false);
     setIsReviewSentenceMeaningOpen(false);
@@ -1449,20 +1533,16 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
   };
 
   const playReviewAudio = () => {
-    const audioUrl = buildReviewAudioUrl(currentReviewQuestion?.audioUrl);
-
-    if (!audioUrl) {
+    if (!currentReviewQuestion?.audioUrl) {
       return;
     }
 
     setReviewReplayCount((current) => current + 1);
-    void new Audio(audioUrl).play();
+    void reviewAudioPoolRef.current?.play(currentReviewQuestion.audioUrl);
   };
 
   const playReviewSoundUrl = (soundUrl?: string | null, shouldCountReplay = false) => {
-    const audioUrl = buildReviewAudioUrl(soundUrl);
-
-    if (!audioUrl) {
+    if (!soundUrl?.trim()) {
       return;
     }
 
@@ -1470,7 +1550,7 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
       setReviewReplayCount((current) => current + 1);
     }
 
-    void new Audio(audioUrl).play();
+    void reviewAudioPoolRef.current?.play(soundUrl);
   };
 
   const activeSectionClass = activeSection ? `vocab-my-panel--${activeSection}` : "";
@@ -1498,7 +1578,14 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
             <button
               className={activeSection === section.key ? "vocab-my-action--active" : ""}
               key={section.key}
-              onClick={() => setActiveSection(section.key)}
+              onClick={() => {
+                if (section.key === "list") {
+                  setSelectedSavedLevel(null);
+                  setSavedPage(0);
+                }
+
+                setActiveSection(section.key);
+              }}
               type="button"
             >
               <HomeIcon name={section.icon} size={activeSection ? 23 : 24} />
@@ -1572,46 +1659,145 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
 
           {activeSection === "list" ? (
             <>
-            <div className="vocab-level-tabs">
-              {savedLevels.map((level) => (
-                <button
-                  className={activeSavedLevel === level ? "vocab-level-tabs__active" : ""}
-                  key={level}
-                  onClick={() => setActiveSavedLevel(level)}
-                  type="button"
-                >
-                  Level {level}
-                </button>
-              ))}
-            </div>
-            {saved.isLoading ? <p>Loading saved words...</p> : null}
-            {saved.error ? <p>{getSafeErrorMessage(saved.error)}</p> : null}
-            <div className="vocab-word-rows">
-              {(saved.data?.content ?? []).map((item) => (
-                <article key={item.id ?? item.wordId}>
-                  <strong>{item.word ?? "Saved word"}</strong>
-                  <span>Level {item.level ?? activeSavedLevel}</span>
-                  {item.id ? (
-                    <button disabled={openSavedWord.isPending} onClick={() => openSavedWord.mutate(item.id as string)} type="button">
-                      See more
+              {selectedSavedLevel === null ? (
+                <div className="vocab-saved-level-overview">
+                  {vocabularyQuantity.isLoading ? (
+                    <p className="vocab-saved-inline-state">Loading vocabulary quantities...</p>
+                  ) : null}
+                  {vocabularyQuantity.error ? (
+                    <div className="vocab-saved-inline-state vocab-saved-inline-state--error">
+                      <p>{getSafeErrorMessage(vocabularyQuantity.error)}</p>
+                      <button onClick={() => void vocabularyQuantity.refetch()} type="button">
+                        Retry
+                      </button>
+                    </div>
+                  ) : null}
+                  {vocabularyQuantity.data ? (
+                    <>
+                      <div className="vocab-saved-level-total">
+                        <span>Total vocabulary</span>
+                        <strong>{formatStatNumber(vocabularyQuantity.data.totalQuantity)}</strong>
+                      </div>
+                      <div className="vocab-saved-level-list">
+                        {vocabularyLevelQuantities.map((levelInfo) => (
+                          <button
+                            className="vocab-saved-level-row"
+                            key={levelInfo.level}
+                            onClick={() => {
+                              setSelectedSavedLevel(levelInfo.level);
+                              setSavedPage(0);
+                            }}
+                            type="button"
+                          >
+                            <span>Level {levelInfo.level}</span>
+                            <strong>{formatStatNumber(levelInfo.quantity)}</strong>
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  ) : null}
+                </div>
+              ) : (
+                <div className="vocab-saved-level-detail">
+                  <div className="vocab-saved-level-detail__header">
+                    <button
+                      onClick={() => {
+                        setSelectedSavedLevel(null);
+                        setSavedPage(0);
+                      }}
+                      type="button"
+                    >
+                      <HomeIcon name="chevron" size={18} />
+                      Back to levels
                     </button>
-                  ) : (
-                    <span>{item.nextReviewAt ? `Next: ${item.nextReviewAt}` : "No schedule"}</span>
-                  )}
-                </article>
-              ))}
-            </div>
-            {openSavedWord.error ? <p>{getSafeErrorMessage(openSavedWord.error)}</p> : null}
-            <HomeWordDetailModal
-              onClose={() => setSavedModalWord(null)}
-              onRequireAuth={() => undefined}
-              word={savedModalWord}
-            />
+                    <div>
+                      <span>Selected collection</span>
+                      <strong>Level {selectedSavedLevel}</strong>
+                      <small>{formatStatNumber(selectedSavedLevelQuantity)} saved words</small>
+                    </div>
+                  </div>
+
+                  {saved.isLoading && !saved.data ? (
+                    <p className="vocab-saved-inline-state">Loading saved words...</p>
+                  ) : null}
+                  {saved.error ? (
+                    <div className="vocab-saved-inline-state vocab-saved-inline-state--error">
+                      <p>{getSafeErrorMessage(saved.error)}</p>
+                      <button onClick={() => void saved.refetch()} type="button">
+                        Retry
+                      </button>
+                    </div>
+                  ) : null}
+                  {saved.data ? (
+                    <>
+                      {saved.isFetching ? <p className="vocab-saved-inline-state">Loading page...</p> : null}
+                      <div className="vocab-word-rows">
+                        {saved.data.content.map((item) => (
+                          <article key={item.id ?? item.wordId}>
+                            <strong>{item.word ?? "Saved word"}</strong>
+                            <span>Level {item.level ?? selectedSavedLevel}</span>
+                            {item.id ? (
+                              <button
+                                disabled={openSavedWord.isPending}
+                                onClick={() => openSavedWord.mutate(item.id as string)}
+                                type="button"
+                              >
+                                See more
+                              </button>
+                            ) : (
+                              <span>{item.nextReviewAt ? `Next: ${item.nextReviewAt}` : "No schedule"}</span>
+                            )}
+                          </article>
+                        ))}
+                      </div>
+                      {saved.data.content.length === 0 ? (
+                        <p className="vocab-saved-inline-state">No saved words were returned for this level.</p>
+                      ) : null}
+                      {saved.data.totalPages > 0 ? (
+                        <div className="vocab-saved-pagination">
+                          <button
+                            disabled={saved.isFetching || saved.data.first}
+                            onClick={() => setSavedPage((current) => Math.max(current - 1, 0))}
+                            type="button"
+                          >
+                            Previous
+                          </button>
+                          <span>Page {saved.data.number + 1} / {saved.data.totalPages}</span>
+                          <button
+                            disabled={saved.isFetching || saved.data.last}
+                            onClick={() => setSavedPage((current) => current + 1)}
+                            type="button"
+                          >
+                            Next
+                          </button>
+                        </div>
+                      ) : null}
+                    </>
+                  ) : null}
+                  {openSavedWord.error ? <p>{getSafeErrorMessage(openSavedWord.error)}</p> : null}
+                </div>
+              )}
+              <HomeWordDetailModal
+                onClose={() => setSavedModalWord(null)}
+                onRequireAuth={() => undefined}
+                word={savedModalWord}
+              />
             </>
           ) : null}
 
           {activeSection === "review" ? (
-            <div className={isReviewStandaloneVisible ? "vocab-review-screen" : "vocab-review-start"}>
+            <div
+              className={isReviewStandaloneVisible ? "vocab-review-screen" : "vocab-review-start"}
+              ref={reviewScreenRef}
+            >
+              {isReviewStandaloneVisible ? (
+                <FloatingVocabularyLookup
+                  anchorRef={reviewScreenRef}
+                  languageCode="vi"
+                  onRequireAuth={() => undefined}
+                  userId={auth.userId}
+                />
+              ) : null}
               {isReviewStandaloneVisible ? (
                 <div className="vocab-review-screen__header">
                   <div>
@@ -1642,6 +1828,21 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
 
               {!isReviewStandaloneVisible ? (
                 <>
+                  {reviewQuantity.isPending ? (
+                    <p className="vocab-review-ready-state">Loading ready vocabulary...</p>
+                  ) : reviewQuantity.isError ? (
+                    <p className="vocab-review-ready-state vocab-review-ready-state--error">
+                      Unable to load the review quantity.{" "}
+                      <button onClick={() => reviewQuantity.refetch()} type="button">
+                        Retry
+                      </button>
+                    </p>
+                  ) : (
+                    <div className="vocab-review-ready-count">
+                      <span>Ready to review</span>
+                      <strong>{formatStatNumber(reviewQuantity.data?.reviewQuantity)}</strong>
+                    </div>
+                  )}
                   <div className="vocab-review-reminder">
                     <span>
                       <HomeIcon name="bell" size={22} />
@@ -1808,7 +2009,13 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
 
                   {currentReviewType === "VOCAB_SENTENCE_TO_MEANING" ? (
                     <div className="vocab-review-question">
-                      <p className="vocab-review-prompt">{currentReviewQuestion.sentence ?? currentReviewQuestion.example?.sentence ?? "Choose the sentence meaning."}</p>
+                      <p className="vocab-review-prompt">
+                        {renderReviewSentence(
+                          currentReviewQuestion.sentence ??
+                            currentReviewQuestion.example?.sentence ??
+                            "Choose the sentence meaning."
+                        )}
+                      </p>
                       <div className="vocab-review-options">
                         {currentReviewMetadataOptions.map((option) => (
                           <button
@@ -1827,7 +2034,13 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
 
                   {currentReviewType === "VOCAB_SENTENCE_BLANK_TO_SOUND" ? (
                     <div className="vocab-review-question">
-                      <p className="vocab-review-prompt">{currentReviewQuestion.sentence ?? currentReviewQuestion.example?.sentence ?? "Choose the missing sound."}</p>
+                      <p className="vocab-review-prompt">
+                        {renderReviewSentence(
+                          currentReviewQuestion.sentence ??
+                            currentReviewQuestion.example?.sentence ??
+                            "Choose the missing sound."
+                        )}
+                      </p>
                       <div className="vocab-review-sound-options">
                         {currentReviewMetadataOptions.map((option, index) => (
                           <button
@@ -1870,7 +2083,9 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
 
                   {currentReviewType === "VOCAB_CHOOSE_WORD_IN_SENTENCE_BLANK" ? (
                     <div className="vocab-review-question">
-                      <p className="vocab-review-prompt">{currentReviewQuestion.sentence ?? "Choose the missing word."}</p>
+                      <p className="vocab-review-prompt">
+                        {renderReviewSentence(currentReviewQuestion.sentence ?? "Choose the missing word.")}
+                      </p>
                       {currentReviewSentenceMeaning ? (
                         <div className="vocab-review-meaning-reveal">
                           <button
@@ -1905,6 +2120,7 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
                         ariaLabel="Missing word in sentence"
                         correctAnswer={currentReviewQuestion.correctAnswer}
                         disabled={Boolean(reviewAttemptResult)}
+                        maskedWord={currentReviewQuestion.maskedWord}
                         onChange={setReviewAnswer}
                         onSubmit={submitCurrentReviewAnswer}
                         text={getReviewSentenceFillText(currentReviewQuestion)}
@@ -2018,7 +2234,6 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
                       </span>
                       <button
                         aria-label="Close result"
-                        disabled={generateWrongReviewQuestion.isPending}
                         onClick={closeReviewResultPopup}
                         type="button"
                       >
@@ -2049,20 +2264,25 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
                     </div>
                     <div className="vocab-review-result-popup__meaning">
                       <span>Meaning</span>
-                      <p>{reviewResultMeaning}</p>
-                      {canExpandReviewDefinition ? (
-                        <button onClick={() => setIsReviewDefinitionOpen((current) => !current)} type="button">
+                      {reviewResultPrimaryMeaning ? <p>{reviewResultPrimaryMeaning}</p> : null}
+                      {!reviewResultMeaningPresentation?.hasAnyMeaning ? <p>No meaning was returned.</p> : null}
+                      {canToggleReviewEnglishMeaning ? (
+                        <button
+                          aria-expanded={isReviewEnglishMeaningOpen}
+                          onClick={() => setIsReviewEnglishMeaningOpen((current) => !current)}
+                          type="button"
+                        >
                           <HomeIcon name="chevron" size={16} />
-                          {isReviewDefinitionOpen ? "Hide definition" : "Show definition"}
+                          {isReviewEnglishMeaningOpen ? "Hide English meaning" : "English meaning"}
                         </button>
                       ) : null}
-                      {isReviewDefinitionOpen && reviewResultDefinition ? <em>{reviewResultDefinition}</em> : null}
+                      {isReviewEnglishMeaningOpen && reviewResultEnglishMeaning ? <em>{reviewResultEnglishMeaning}</em> : null}
                     </div>
                     {reviewResultExample ? (
                       <div className="vocab-review-result-popup__example">
                         <span>{isReviewResultSentenceQuestion ? "Completed sentence" : "Example"}</span>
                         <p>
-                          {reviewResultExample}
+                          {getPlainReviewSentence(reviewResultExample)}
                           {reviewResultExampleTrans ? (
                             <button
                               aria-label="Show example meaning"
@@ -2087,7 +2307,7 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
                         {isReviewMoreExampleOpen && reviewResultExtraExample ? (
                           <div className="vocab-review-result-popup__extra-example">
                             <span>Another example</span>
-                            <p>{reviewResultExtraExample}</p>
+                            <p>{getPlainReviewSentence(reviewResultExtraExample)}</p>
                             {reviewResultExtraExampleTrans ? <em>{reviewResultExtraExampleTrans}</em> : null}
                           </div>
                         ) : null}
@@ -2095,11 +2315,10 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
                     ) : null}
                     <button
                       className="vocab-review-result-popup__close"
-                      disabled={generateWrongReviewQuestion.isPending}
                       onClick={closeReviewResultPopup}
                       type="button"
                     >
-                      {generateWrongReviewQuestion.isPending ? "Loading next..." : "Continue"}
+                      Continue
                     </button>
                   </section>
                 </div>

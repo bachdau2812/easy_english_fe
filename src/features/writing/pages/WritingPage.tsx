@@ -21,6 +21,55 @@ const getTaskLabel = (taskType: WritingTaskType) => `IELTS Writing Task ${taskTy
 const countWords = (text: string) => text.trim().split(/\s+/).filter(Boolean).length;
 const getMinWords = (taskType: WritingTaskType) => (taskType === 1 ? 150 : 250);
 const getDuration = (taskType: WritingTaskType) => (taskType === 1 ? 20 * 60 : 40 * 60);
+const WRITING_FONT_STORAGE_KEY = "vocab.writing.font-family";
+const WRITING_FONT_SIZE_STORAGE_KEY = "vocab.writing.font-size";
+const WRITING_FONT_OPTIONS = [
+  { label: "Arial", value: "Arial, sans-serif" },
+  { label: "Georgia", value: "Georgia, serif" },
+  { label: "Times New Roman", value: '"Times New Roman", serif' },
+  { label: "Verdana", value: "Verdana, sans-serif" },
+  { label: "Monospace", value: "monospace" }
+] as const;
+const WRITING_FONT_SIZE_OPTIONS = [14, 16, 18, 20, 22, 24] as const;
+type WritingFontFamily = (typeof WRITING_FONT_OPTIONS)[number]["value"];
+type WritingFontSize = (typeof WRITING_FONT_SIZE_OPTIONS)[number];
+const DEFAULT_WRITING_FONT: WritingFontFamily = "Arial, sans-serif";
+const DEFAULT_WRITING_FONT_SIZE: WritingFontSize = 16;
+
+const readStoredWritingFontFamily = (): WritingFontFamily => {
+  if (typeof window === "undefined") return DEFAULT_WRITING_FONT;
+
+  try {
+    const storedFont = window.localStorage.getItem(WRITING_FONT_STORAGE_KEY);
+    return WRITING_FONT_OPTIONS.some((option) => option.value === storedFont)
+      ? (storedFont as WritingFontFamily)
+      : DEFAULT_WRITING_FONT;
+  } catch {
+    return DEFAULT_WRITING_FONT;
+  }
+};
+
+const readStoredWritingFontSize = (): WritingFontSize => {
+  if (typeof window === "undefined") return DEFAULT_WRITING_FONT_SIZE;
+
+  try {
+    const storedSize = Number(window.localStorage.getItem(WRITING_FONT_SIZE_STORAGE_KEY));
+    return WRITING_FONT_SIZE_OPTIONS.includes(storedSize as WritingFontSize)
+      ? (storedSize as WritingFontSize)
+      : DEFAULT_WRITING_FONT_SIZE;
+  } catch {
+    return DEFAULT_WRITING_FONT_SIZE;
+  }
+};
+
+const storeWritingPreference = (key: string, value: string | number) => {
+  try {
+    window.localStorage.setItem(key, String(value));
+  } catch {
+    // Keep the current selection even when browser storage is unavailable.
+  }
+};
+
 const formatTime = (value: number) => {
   const minutes = Math.floor(value / 60).toString().padStart(2, "0");
   const seconds = Math.floor(value % 60).toString().padStart(2, "0");
@@ -491,6 +540,8 @@ export const WritingPracticePage = () => {
   const problem = state.problem ?? problemQuery.data ?? null;
   const taskType: WritingTaskType = (state.taskType ?? (problem?.taskType === 1 ? 1 : 2)) as WritingTaskType;
   const [answer, setAnswer] = useState("");
+  const [writingFontFamily, setWritingFontFamily] = useState<WritingFontFamily>(readStoredWritingFontFamily);
+  const [writingFontSize, setWritingFontSize] = useState<WritingFontSize>(readStoredWritingFontSize);
   const [useTimer, setUseTimer] = useState(false);
   const [remaining, setRemaining] = useState(getDuration(taskType));
   const [isFinished, setIsFinished] = useState(false);
@@ -650,13 +701,56 @@ export const WritingPracticePage = () => {
             </article>
             <section className="writing-answer-card">
               <div className="writing-answer-card__toolbar">
-                <span>{wordCount} words / minimum {minWords}</span>
-                <label><input checked={useTimer} onChange={(event) => setUseTimer(event.target.checked)} type="checkbox" /> Set timer</label>
+                <span className="writing-answer-card__word-count">{wordCount} words / minimum {minWords}</span>
+                <div className="writing-answer-card__controls">
+                  <label className="writing-answer-card__select">
+                    <span>Font</span>
+                    <select
+                      aria-label="Writing font"
+                      disabled={isFinished || reviewWriting.isPending}
+                      onChange={(event) => {
+                        const nextFont = event.target.value as WritingFontFamily;
+                        setWritingFontFamily(nextFont);
+                        storeWritingPreference(WRITING_FONT_STORAGE_KEY, nextFont);
+                      }}
+                      value={writingFontFamily}
+                    >
+                      {WRITING_FONT_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="writing-answer-card__select">
+                    <span>Size</span>
+                    <select
+                      aria-label="Writing font size"
+                      disabled={isFinished || reviewWriting.isPending}
+                      onChange={(event) => {
+                        const nextSize = Number(event.target.value) as WritingFontSize;
+                        setWritingFontSize(nextSize);
+                        storeWritingPreference(WRITING_FONT_SIZE_STORAGE_KEY, nextSize);
+                      }}
+                      value={writingFontSize}
+                    >
+                      {WRITING_FONT_SIZE_OPTIONS.map((size) => (
+                        <option key={size} value={size}>
+                          {size}px
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="writing-answer-card__timer">
+                    <input checked={useTimer} onChange={(event) => setUseTimer(event.target.checked)} type="checkbox" /> Set timer
+                  </label>
+                </div>
               </div>
               <textarea
                 disabled={isFinished || reviewWriting.isPending}
                 onChange={(event) => setAnswer(event.target.value)}
                 placeholder="Write your answer here..."
+                style={{ fontFamily: writingFontFamily, fontSize: `${writingFontSize}px` }}
                 value={answer}
               />
               <button

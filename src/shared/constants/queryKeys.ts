@@ -1,10 +1,14 @@
 export const queryKeys = {
   currentUser: (userId?: string | null) => ["auth", "currentUser", userId] as const,
-  autocomplete: (text: string) => ["search", "autocomplete", text] as const,
+  autocomplete: (text: string, isUniqueSearch = false) =>
+    ["search", "autocomplete", text, isUniqueSearch ? "unique" : "pos"] as const,
   defaultSuggestions: () => ["search", "defaultSuggestions"] as const,
   wordDetail: (wordId?: string | null) => ["dictionary", "wordDetail", wordId] as const,
-  savedVocabularies: (userId?: string | null, level?: number) =>
-    ["vocabulary", "saved", userId, level] as const,
+  searchHistory: (userId?: string | null) => ["search", "history", userId] as const,
+  savedVocabularies: (userId?: string | null, level?: number, page?: number, limit?: number) =>
+    ["vocabulary", "saved", userId, level, page, limit] as const,
+  vocabularyInfo: (userId?: string | null, infoType?: string | null) =>
+    ["vocabulary", "info", userId, infoType] as const,
   reviewSession: (userId?: string | null, totalReviewVocab?: number) =>
     ["review", "session", userId, totalReviewVocab] as const,
   listeningCategories: () => ["listening", "categories"] as const,

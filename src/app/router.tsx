@@ -8,6 +8,7 @@ import { LoginPage } from "../features/auth/pages/LoginPage";
 import { RegisterPage } from "../features/auth/pages/RegisterPage";
 import { WordDetailPage } from "../features/dictionary/pages/WordDetailPage";
 import { HomePage } from "../features/home/pages/HomePage";
+import { LearningCategoryPage } from "../features/home/pages/LearningCategoryPage";
 import { ListeningDetailPage } from "../features/listening/pages/ListeningDetailPage";
 import { ListenAndTypeExplorePage } from "../features/listening/pages/ListenAndTypeExplorePage";
 import { ListeningListPage } from "../features/listening/pages/ListeningListPage";
@@ -67,6 +68,10 @@ const router = createBrowserRouter([
       {
         path: ROUTES.home,
         element: <HomePage />
+      },
+      {
+        path: ROUTES.learningCategory(),
+        element: <LearningCategoryPage />
       },
       {
         path: ROUTES.vocabularyTopics,

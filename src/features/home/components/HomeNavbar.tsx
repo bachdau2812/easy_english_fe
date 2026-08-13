@@ -6,15 +6,22 @@ import flyingAroundTheWorld from "../../../assets/flying-around-the-world.svg";
 import vietnamLogo from "../../../assets/vietnam.avif";
 import { getSafeErrorMessage } from "../../../shared/api/apiError";
 import { ROUTES } from "../../../shared/constants/routes";
+import { queryKeys } from "../../../shared/constants/queryKeys";
 import { useClickOutside } from "../../../shared/hooks/useClickOutside";
 import { normalizeSearchText } from "../../../shared/utils/normalize";
 import { authApi } from "../../auth/api/authApi";
 import { useAuth } from "../../auth/hooks/useAuth";
 import { useAutocomplete } from "../../search/hooks/useAutocomplete";
+import { toggleSearchModeReveal } from "../../search/searchModeReveal";
 import { vocabularyApi } from "../../vocabulary/api/vocabularyApi";
 import { Word } from "../../dictionary/types";
 import { VocabularyExplorerMode } from "./HomeVocabularyExplorer";
 import { HomeIcon } from "./HomeIcon";
+import {
+  getLearningNavigationGroup,
+  learningNavigationGroups,
+  LearningNavigationKey
+} from "../learningNavigation";
 
 interface HomeNavbarProps {
   compactTitle?: string;
@@ -22,8 +29,8 @@ interface HomeNavbarProps {
   onHomeClick?: () => void;
   onLanguageChange: (languageCode: string) => void;
   onProfileOpen: () => void;
-  onSearchSubmit: (text: string, languageCode: string) => void;
-  onSuggestionSelect: (word: Word, languageCode: string) => void;
+  onSearchSubmit: (text: string, languageCode: string, isUniqueSearch: boolean) => void;
+  onSuggestionSelect: (word: Word, languageCode: string, isUniqueSearch: boolean) => void;
   onVocabularySelect: (mode: VocabularyExplorerMode) => void;
 }
 
@@ -32,50 +39,25 @@ const languageOptions = [
   { code: "en", flagSrc: englandLogo, label: "English" }
 ];
 
-type MegaKey = "listening" | "pronunciation" | "reading" | "vocabulary" | "writing";
+type MegaKey = LearningNavigationKey;
 
-const navItems: Array<{ href: string; key: MegaKey; label: string }> = [
-  { href: "#vocabulary", key: "vocabulary", label: "Vocabulary" },
-  { href: "#writing", key: "writing", label: "Writing" },
-  { href: "#listening", key: "listening", label: "Listening" },
-  { href: "#pronunciation", key: "pronunciation", label: "Pronunciation" },
-  { href: "#reading", key: "reading", label: "Reading" }
-];
+const navItems = learningNavigationGroups.map((group) => ({
+  href: `#${group.key}`,
+  key: group.key,
+  label: group.label
+}));
 
-const compactNavItems: Array<{
-  icon: "book" | "headphones" | "pen" | "reading" | "volume";
-  key: MegaKey;
-  label: string;
-}> = [
-  { icon: "book", key: "vocabulary", label: "Vocabulary" },
-  { icon: "pen", key: "writing", label: "Writing" },
-  { icon: "headphones", key: "listening", label: "Listening" },
-  { icon: "volume", key: "pronunciation", label: "Pronunciation" },
-  { icon: "reading", key: "reading", label: "Reading" }
-];
-
-const megaCopy: Record<Exclude<MegaKey, "vocabulary">, Array<{ label: string; text: string }>> = {
-  listening: [
-    { label: "Listen and Type", text: "Audio challenges with focused replay." },
-    { label: "Daily audio", text: "Short clips for building a listening habit." },
-    { label: "Dictation drills", text: "Catch spelling, rhythm, and word endings." }
-  ],
-  reading: [
-    { label: "IELTS Resource", text: "Browse IELTS reading sources by category." }
-  ],
-  pronunciation: [
-    { label: "Coming Soon", text: "Pronunciation practice is being prepared." }
-  ],
-  writing: [
-    { label: "IELTS Writing Task 1", text: "Charts, maps, processes, and visual reports." },
-    { label: "IELTS Writing Task 2", text: "Essay prompts by topic and opinion type." }
-  ]
-};
+const compactNavItems = learningNavigationGroups.map((group) => ({
+  icon: group.icon,
+  key: group.key,
+  label: group.label
+}));
 
 type DropdownItem = {
   description: string;
+  disabled?: boolean;
   href?: string;
-  icon: "book" | "bookmark" | "brain" | "chart";
+  icon: import("../learningNavigation").LearningNavigationIcon;
   label: string;
   onClick?: () => void;
   to?: string;
@@ -107,11 +89,16 @@ export const HomeNavbar = ({
   const [isCompactTitleTucked, setIsCompactTitleTucked] = useState(false);
   const [language, setLanguage] = useState(languageOptions[0]);
   const [searchText, setSearchText] = useState("");
+  const [searchModeReveal, setSearchModeReveal] = useState({
+    isUniqueSearch: false,
+    revealKey: 0
+  });
+  const { isUniqueSearch, revealKey: allMeaningRevealKey } = searchModeReveal;
   const languageRef = useRef<HTMLDivElement>(null);
-  const autocomplete = useAutocomplete(searchText);
+  const autocomplete = useAutocomplete(searchText, isUniqueSearch);
   const searchHistory = useQuery({
     enabled: Boolean(isSearchOpen && auth.userId),
-    queryKey: ["navbar", "search-history", auth.userId],
+    queryKey: queryKeys.searchHistory(auth.userId),
     queryFn: () => vocabularyApi.getSearchHistory({ userId: auth.userId as string, page: 0, limit: 8 })
   });
   const isRouteCompact = Boolean(compactTitle);
@@ -234,7 +221,7 @@ export const HomeNavbar = ({
       return;
     }
 
-    onSearchSubmit(normalizedText, language.code);
+    onSearchSubmit(normalizedText, language.code, isUniqueSearch);
     setIsSearchOpen(false);
     setSearchText("");
   };
@@ -249,61 +236,25 @@ export const HomeNavbar = ({
     }
   };
 
-  const handleLogoClick = (event: MouseEvent<HTMLAnchorElement>) => {
-    const isSmallViewport = window.matchMedia("(max-width: 760px)").matches;
-
-    if (isSmallViewport && !isCompactMenuOpen) {
-      event.preventDefault();
-      setActiveMega(null);
-      setIsSearchOpen(false);
-      setIsCompactMenuOpen(true);
-      return;
-    }
-
+  const handleLogoClick = () => {
+    setActiveMega(null);
+    setIsSearchOpen(false);
     setIsCompactMenuOpen(false);
     onHomeClick?.();
   };
 
   const dropdownItems: DropdownItem[] = activeMega
-    ? activeMega === "vocabulary"
-      ? [
-          {
-            description: "Explore categories in a friendly grid.",
-            icon: "book" as const,
-            label: "Words by topic",
-            onClick: () => onVocabularySelect("topics")
-          },
-          {
-            description: "Browse A1 to C2 with paged word lists.",
-            icon: "chart" as const,
-            label: "Words by level",
-            onClick: () => onVocabularySelect("levels")
-          },
-          {
-            description: "Saved words, stats, and review entry points.",
-            icon: "bookmark" as const,
-            label: "My Vocabulary",
-            onClick: () => onVocabularySelect("mine")
-          }
-        ]
-      : megaCopy[activeMega].map((item, index) => ({
-          description: item.text,
-          href: `#${activeMega}`,
-          icon: (index === 0 ? "book" : index === 1 ? "brain" : "chart") as "book" | "brain" | "chart",
-          label: item.label,
-          onClick:
-            activeMega === "pronunciation"
-              ? () => undefined
-              : undefined,
-          to:
-            activeMega === "listening" && index === 0
-              ? ROUTES.listenAndType
-              : activeMega === "reading" && index === 0
-                ? ROUTES.readingIelts
-                : activeMega === "writing"
-                  ? ROUTES.writingTask(index === 0 ? "1" : "2")
-                  : undefined
-        }))
+    ? (getLearningNavigationGroup(activeMega)?.items ?? []).map((item) => ({
+        description: item.description,
+        disabled: item.disabled,
+        href: item.href,
+        icon: item.icon,
+        label: item.label,
+        onClick: item.vocabularyMode
+          ? () => onVocabularySelect(item.vocabularyMode as VocabularyExplorerMode)
+          : undefined,
+        to: item.to
+      }))
     : [];
 
   const languagePicker = (
@@ -353,59 +304,28 @@ export const HomeNavbar = ({
           </button>
           <div className="guest-navbar__compact-submenu">
             <strong>{item.label}</strong>
-            {item.key === "vocabulary" ? (
-              <>
+            {(getLearningNavigationGroup(item.key)?.items ?? []).map((subItem) =>
+              subItem.disabled ? (
+                <button disabled key={subItem.label} type="button">{subItem.label}</button>
+              ) : subItem.vocabularyMode ? (
                 <button
+                  key={subItem.label}
                   onClick={() => {
-                    onVocabularySelect("topics");
+                    onVocabularySelect(subItem.vocabularyMode as VocabularyExplorerMode);
                     setIsCompactMenuOpen(false);
                   }}
                   type="button"
                 >
-                  Words by topic
+                  {subItem.label}
                 </button>
-                <button
-                  onClick={() => {
-                    onVocabularySelect("levels");
-                    setIsCompactMenuOpen(false);
-                  }}
-                  type="button"
+              ) : (
+                <Link
+                  key={subItem.label}
+                  onClick={() => setIsCompactMenuOpen(false)}
+                  to={subItem.to ?? { pathname: ROUTES.home, hash: subItem.href }}
                 >
-                  Words by level
-                </button>
-                <button
-                  onClick={() => {
-                    onVocabularySelect("mine");
-                    setIsCompactMenuOpen(false);
-                  }}
-                  type="button"
-                >
-                  My Vocabulary
-                </button>
-              </>
-            ) : (
-              megaCopy[item.key].map((subItem, index) =>
-                item.key === "pronunciation" ? (
-                  <button disabled key={subItem.label} type="button">
-                    {subItem.label}
-                  </button>
-                ) : (
-                  <Link
-                    key={subItem.label}
-                    onClick={() => setIsCompactMenuOpen(false)}
-                    to={
-                      item.key === "listening" && index === 0
-                        ? ROUTES.listenAndType
-                        : item.key === "reading" && index === 0
-                          ? ROUTES.readingIelts
-                          : item.key === "writing"
-                            ? ROUTES.writingTask(index === 0 ? "1" : "2")
-                            : `${ROUTES.home}#${item.key}`
-                    }
-                  >
-                    <span>{subItem.label}</span>
-                  </Link>
-                )
+                  <span>{subItem.label}</span>
+                </Link>
               )
             )}
           </div>
@@ -429,14 +349,14 @@ export const HomeNavbar = ({
     >
       <div
         className="guest-navbar__left"
-        onMouseEnter={() => setIsCompactMenuOpen(true)}
+        onMouseEnter={() => isRouteCompact && setIsCompactMenuOpen(true)}
         onMouseLeave={() => setIsCompactMenuOpen(false)}
       >
         <Link className="guest-navbar__logo" to={ROUTES.home} aria-label="Easy English home" onClick={handleLogoClick}>
           <span className="guest-navbar__logo-fallback" aria-hidden="true">E</span>
           <img alt="" src={flyingAroundTheWorld} />
         </Link>
-        {isRouteCompact ? compactMenu : <div className="guest-navbar__mobile-compact-menu">{compactMenu}</div>}
+        {isRouteCompact ? compactMenu : null}
       </div>
 
       <div className="guest-navbar__center">
@@ -475,6 +395,27 @@ export const HomeNavbar = ({
                 ref={searchInputRef}
                 value={searchText}
               />
+              <button
+                aria-checked={isUniqueSearch}
+                aria-label="Search all meanings and parts of speech"
+                className={`guest-navbar__search-mode ${isUniqueSearch ? "guest-navbar__search-mode--active" : ""}`}
+                onClick={() => setSearchModeReveal(toggleSearchModeReveal)}
+                role="switch"
+                title="Search all meanings"
+                type="button"
+              >
+                {allMeaningRevealKey > 0 ? (
+                  <span
+                    aria-hidden="true"
+                    className="guest-navbar__search-mode-reveal"
+                    key={allMeaningRevealKey}
+                  >
+                    All Meaning
+                  </span>
+                ) : null}
+                <span className="guest-navbar__search-mode-label">All meanings</span>
+                <i aria-hidden="true" />
+              </button>
               {isSearchOpen && searchText.trim() ? (
                 <div className="guest-search-suggestions">
                   {autocomplete.isLoading ? <p>Looking for matches...</p> : null}
@@ -487,14 +428,16 @@ export const HomeNavbar = ({
                         <button
                           key={word.id ?? word.word ?? word.normalizedWord}
                           onClick={() => {
-                            onSuggestionSelect(word, language.code);
+                            onSuggestionSelect(word, language.code, isUniqueSearch);
                             setSearchText("");
                             setIsSearchOpen(false);
                           }}
                           type="button"
                         >
                           <span>{word.word ?? word.normalizedWord ?? "Untitled word"}</span>
-                          <small>{[word.pos, word.certLevel].filter(Boolean).join(" / ") || "Word"}</small>
+                          {!isUniqueSearch ? (
+                            <small>{[word.pos, word.certLevel].filter(Boolean).join(" / ") || "Word"}</small>
+                          ) : null}
                         </button>
                       ))
                     : null}
@@ -519,10 +462,16 @@ export const HomeNavbar = ({
                           onClick={() => {
                             const nextWord = item.word?.trim();
 
-                            if (item.wordId) {
-                              onSuggestionSelect({ id: item.wordId, word: nextWord ?? "Recent word" }, language.code);
+                            if (isUniqueSearch && nextWord) {
+                              onSearchSubmit(normalizeSearchText(nextWord), language.code, true);
+                            } else if (item.wordId) {
+                              onSuggestionSelect(
+                                { id: item.wordId, word: nextWord ?? "Recent word" },
+                                language.code,
+                                false
+                              );
                             } else if (nextWord) {
-                              onSearchSubmit(normalizeSearchText(nextWord), language.code);
+                              onSearchSubmit(normalizeSearchText(nextWord), language.code, false);
                             }
 
                             setSearchText("");
@@ -642,7 +591,7 @@ export const HomeNavbar = ({
                   <HomeIcon name="chevron" size={18} />
                 </a>
               ) : (
-                <button disabled key={item.label} type="button">
+                <button disabled={item.disabled} key={item.label} type="button">
                   <span className="guest-navbar__mega-icon">
                     <HomeIcon name={item.icon} size={19} />
                   </span>

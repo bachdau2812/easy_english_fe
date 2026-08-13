@@ -2,20 +2,22 @@ import { useRef } from "react";
 import { useClickOutside } from "../../../shared/hooks/useClickOutside";
 import { WordResponse } from "../../dictionary/types";
 import { HomeIcon } from "./HomeIcon";
-import { HomeWordResult } from "./HomeWordResult";
+import { HomeWordResults } from "./HomeWordResults";
 
 interface HomeWordDetailModalProps {
   onClose: () => void;
   onRequireAuth: () => void;
-  word: WordResponse | null;
+  word?: WordResponse | null;
+  words?: WordResponse[];
 }
 
-export const HomeWordDetailModal = ({ onClose, onRequireAuth, word }: HomeWordDetailModalProps) => {
+export const HomeWordDetailModal = ({ onClose, onRequireAuth, word, words }: HomeWordDetailModalProps) => {
   const modalRef = useRef<HTMLDivElement>(null);
+  const resultWords = words?.length ? words : word ? [word] : [];
 
   useClickOutside(modalRef, onClose);
 
-  if (!word) {
+  if (resultWords.length === 0) {
     return null;
   }
 
@@ -30,7 +32,7 @@ export const HomeWordDetailModal = ({ onClose, onRequireAuth, word }: HomeWordDe
         >
           <HomeIcon name="close" size={20} />
         </button>
-        <HomeWordResult onRequireAuth={onRequireAuth} word={word} />
+        <HomeWordResults onRequireAuth={onRequireAuth} words={resultWords} />
       </section>
     </div>
   );

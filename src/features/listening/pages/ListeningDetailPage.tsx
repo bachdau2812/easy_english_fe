@@ -10,6 +10,11 @@ import { useAuth } from "../../auth/hooks/useAuth";
 import { HomeIcon } from "../../home/components/HomeIcon";
 import { reviewApi } from "../../review/api/reviewApi";
 import { useListeningExerciseDetail } from "../hooks/useListeningExerciseDetail";
+import {
+  getDictationMask,
+  getInitialChallengeIndex,
+  normalizeDictationAnswer
+} from "../listenAndType";
 import { ListenAndTypeChallengeResponse, ListenAndTypeReturnState } from "../types";
 
 type ListenTab = "dictation" | "transcript";
@@ -31,16 +36,6 @@ type BrowserSpeechRecognition = {
 };
 
 type BrowserSpeechRecognitionConstructor = new () => BrowserSpeechRecognition;
-
-const normalizeDictationAnswer = (value?: string | null) =>
-  value
-    ?.normalize("NFKC")
-    .replace(/[\u200B-\u200D\uFEFF]/g, "")
-    .replace(/[’‘]/g, "'")
-    .trim()
-    .toLowerCase()
-    .replace(/[.,!?;:"()[\]{}]/g, "")
-    .replace(/\s+/g, " ") ?? "";
 
 const splitDictationWords = (value?: string | null) => value?.trim().split(/\s+/).filter(Boolean) ?? [];
 
@@ -202,7 +197,7 @@ const getHintTokens = (answer: string, solutionAlternatives: string[][]): Dictat
   return solutionWords
     .map((word, index) => ({
       isCorrect: index < correctPrefix,
-      text: index < visibleCount ? word : "*".repeat(Math.max(3, word.length))
+      text: index < visibleCount ? word : getDictationMask(word)
     }));
 };
 
@@ -222,6 +217,8 @@ export const ListeningDetailPage = () => {
   const queryClient = useQueryClient();
   const { lessonId } = useParams();
   const dictationAudioRef = useRef<HTMLAudioElement>(null);
+  const dictationInputRef = useRef<HTMLTextAreaElement>(null);
+  const initializedLessonIdRef = useRef<string | null>(null);
   const mainAudioRef = useRef<HTMLAudioElement>(null);
   const correctPopupOpenedAtRef = useRef(0);
   const previousDictationChallengeIdRef = useRef<string | null>(null);
@@ -296,6 +293,25 @@ export const ListeningDetailPage = () => {
   const isLastChallenge = currentIndex >= challenges.length - 1;
 
   useEffect(() => {
+    const loadedLessonId = lesson.data?.lessonId ?? lessonId ?? null;
+
+    if (
+      !loadedLessonId ||
+      initializedLessonIdRef.current === loadedLessonId ||
+      challenges.length === 0
+    ) {
+      return;
+    }
+
+    initializedLessonIdRef.current = loadedLessonId;
+    setDoneIds(new Set(lesson.data?.completedChallengeIds ?? []));
+    setRetryIds(new Set());
+    setCurrentIndex(
+      getInitialChallengeIndex(challenges, lesson.data?.completedChallengeIds ?? [])
+    );
+  }, [challenges, lesson.data?.completedChallengeIds, lesson.data?.lessonId, lessonId]);
+
+  useEffect(() => {
     if (!currentChallenge) {
       return;
     }
@@ -306,6 +322,18 @@ export const ListeningDetailPage = () => {
     }
     setIncorrectHint(null);
   }, [currentChallengeId, currentSolution, isCurrentDone, isCorrectPopupOpen]);
+
+  useEffect(() => {
+    if (activeTab !== "dictation" || !currentChallenge || isCurrentDone) {
+      return;
+    }
+
+    const focusTimer = window.setTimeout(() => {
+      dictationInputRef.current?.focus();
+    }, 0);
+
+    return () => window.clearTimeout(focusTimer);
+  }, [activeTab, currentChallengeId, isCurrentDone]);
 
   useEffect(
     () => () => {
@@ -654,9 +682,19 @@ export const ListeningDetailPage = () => {
                     <div className="listen-dictation-complete">
                       <small>Completed answer</small>
                       <p>{currentSolution}</p>
-                      <button onClick={retryCurrentChallenge} type="button">
-                        Try again
-                      </button>
+                      <div className="listen-dictation-actions">
+                        <button onClick={retryCurrentChallenge} type="button">
+                          Try again
+                        </button>
+                        {!isLastChallenge ? (
+                          <button
+                            onClick={() => moveToChallenge(currentIndex + 1)}
+                            type="button"
+                          >
+                            Next
+                          </button>
+                        ) : null}
+                      </div>
                     </div>
                   ) : (
                     <>
@@ -672,6 +710,7 @@ export const ListeningDetailPage = () => {
                           }}
                           onKeyDown={handleTextareaKeyDown}
                           placeholder="Type what you hear..."
+                          ref={dictationInputRef}
                           rows={7}
                           value={answer}
                         />

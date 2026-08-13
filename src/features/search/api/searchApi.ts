@@ -1,11 +1,12 @@
 import { apiClient } from "../../../shared/api/apiClient";
 import { Word, WordResponse } from "../../dictionary/types";
+import { buildAutocompleteQuery } from "./searchParams";
 
 export const searchApi = {
-  autocomplete(text: string, signal?: AbortSignal) {
+  autocomplete(text: string, isUniqueSearch = false, signal?: AbortSignal) {
     return apiClient.get<Word[]>("/word-data/words/basic-search", {
       auth: false,
-      query: { text, isAutocomplete: true },
+      query: buildAutocompleteQuery(text, isUniqueSearch),
       signal
     });
   },

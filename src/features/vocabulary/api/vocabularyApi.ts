@@ -4,6 +4,8 @@ import { WordResponse } from "../../dictionary/types";
 import {
   UserSearchHistoryRequest,
   UserSearchHistoryResponse,
+  UserVocabularyInfoResponse,
+  UserVocabularyInfoType,
   UserVocabularyRequest,
   UserVocabularyResponse
 } from "../types";
@@ -11,6 +13,14 @@ import {
 export const vocabularyApi = {
   saveVocabulary(payload: UserVocabularyRequest) {
     return apiClient.post<UserVocabularyResponse>("/user-vocabularies", payload);
+  },
+  getVocabularyInfo(params: { infoType: UserVocabularyInfoType; userId: string }) {
+    return apiClient.get<UserVocabularyInfoResponse>("/user-vocabularies/info", {
+      query: {
+        userId: params.userId,
+        infoType: params.infoType
+      }
+    });
   },
   getSavedVocabulariesByLevel(params: {
     level: number;
