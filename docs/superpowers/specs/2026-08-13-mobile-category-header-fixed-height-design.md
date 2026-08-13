@@ -18,10 +18,10 @@ On mobile, the category page will:
 
 - align its grid content to the start;
 - define two content-sized rows for the header and function list;
-- keep a 12-pixel gap between those rows;
+- keep an 18-pixel gap between the header and function-list rows;
 - give the header an exact border-box height of 92 pixels and prevent grid stretching.
 
-The list remains immediately below the header and continues to grow naturally with its cards.
+The list remains below the header with 18 pixels of separation and continues to grow naturally with its cards. The existing 9-pixel gap between function cards remains unchanged.
 
 ## Testing
 
