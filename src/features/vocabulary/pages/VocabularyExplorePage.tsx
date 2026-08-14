@@ -373,61 +373,68 @@ const InlineReviewAnswer = ({
     focusSlot(removeIndex);
   };
 
-  const renderSlotInput = (globalIndex: number) => (
-    <input
-      aria-label={`${ariaLabel} ${globalIndex + 1}`}
-      className={
-        globalIndex === activeSlotIndex && !disabled
-          ? "vocab-review-slot-input__control is-active"
-          : "vocab-review-slot-input__control"
-      }
-      disabled={disabled}
-      key={`slot-${globalIndex}`}
-      maxLength={1}
-      onChange={(event) => {
-        const enteredCharacters = [...event.target.value];
-        updateSlotValue(globalIndex, enteredCharacters[enteredCharacters.length - 1] ?? "");
-      }}
-      onFocus={() => {
-        if (globalIndex > safeValue.length) {
-          focusSlot(activeSlotIndex);
-        }
-      }}
-      onKeyDown={(event) => {
-        if (event.key === "Enter") {
-          event.preventDefault();
-          onSubmit();
-          return;
-        }
+  const renderSlotInput = (globalIndex: number) => {
+    const isActive = globalIndex === activeSlotIndex && !disabled;
 
-        if (event.key === "Backspace") {
-          event.preventDefault();
-          removeSlotValue(globalIndex);
-        }
-      }}
-      onPaste={(event) => {
-        event.preventDefault();
+    return (
+      <span className="vocab-review-slot" key={`slot-${globalIndex}`}>
+        <span
+          aria-hidden="true"
+          className={isActive ? "vocab-review-slot__glyph is-active" : "vocab-review-slot__glyph"}
+        >
+          {safeValue[globalIndex] ?? "_"}
+        </span>
+        <input
+          aria-label={`${ariaLabel} ${globalIndex + 1}`}
+          className={isActive ? "vocab-review-slot-input__control is-active" : "vocab-review-slot-input__control"}
+          disabled={disabled}
+          maxLength={1}
+          onChange={(event) => {
+            const enteredCharacters = [...event.target.value];
+            updateSlotValue(globalIndex, enteredCharacters[enteredCharacters.length - 1] ?? "");
+          }}
+          onFocus={() => {
+            if (globalIndex > safeValue.length) {
+              focusSlot(activeSlotIndex);
+            }
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              onSubmit();
+              return;
+            }
 
-        if (globalIndex > safeValue.length) {
-          focusSlot(activeSlotIndex);
-          return;
-        }
+            if (event.key === "Backspace") {
+              event.preventDefault();
+              removeSlotValue(globalIndex);
+            }
+          }}
+          onPaste={(event) => {
+            event.preventDefault();
 
-        const pastedText = event.clipboardData.getData("text").replace(/\s+/g, "");
-        const nextValue = `${safeValue.slice(0, globalIndex)}${pastedText}${safeValue.slice(
-          globalIndex + pastedText.length
-        )}`.slice(0, blankLength);
+            if (globalIndex > safeValue.length) {
+              focusSlot(activeSlotIndex);
+              return;
+            }
 
-        onChange(nextValue);
-        focusSlot(Math.min(nextValue.length, blankLength - 1));
-      }}
-      placeholder="_"
-      ref={(element) => {
-        slotRefs.current[globalIndex] = element;
-      }}
-      value={safeValue[globalIndex] ?? ""}
-    />
-  );
+            const pastedText = event.clipboardData.getData("text").replace(/\s+/g, "");
+            const nextValue = `${safeValue.slice(0, globalIndex)}${pastedText}${safeValue.slice(
+              globalIndex + pastedText.length
+            )}`.slice(0, blankLength);
+
+            onChange(nextValue);
+            focusSlot(Math.min(nextValue.length, blankLength - 1));
+          }}
+          placeholder="_"
+          ref={(element) => {
+            slotRefs.current[globalIndex] = element;
+          }}
+          value={safeValue[globalIndex] ?? ""}
+        />
+      </span>
+    );
+  };
 
   let consumedBlankCount = 0;
 

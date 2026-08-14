@@ -3,11 +3,32 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const css = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
+const vocabularyPageSource = readFileSync(
+  new URL("../src/features/vocabulary/pages/VocabularyExplorePage.tsx", import.meta.url),
+  "utf8"
+);
 
 const getRuleBody = (selector: string) => {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   return css.match(new RegExp(`${escapedSelector}\\s*\\{([^}]+)\\}`))?.[1] ?? "";
 };
+
+test("review slots paint entered characters in a baseline-aligned glyph layer", () => {
+  const slotRule = getRuleBody(".vocab-review-slot");
+  const glyphRule = getRuleBody(".vocab-review-slot__glyph");
+  const slotControlRule = getRuleBody(".vocab-review-slot-input__control");
+
+  assert.match(vocabularyPageSource, /className="vocab-review-slot"/);
+  assert.match(vocabularyPageSource, /aria-hidden="true"/);
+  assert.match(vocabularyPageSource, /vocab-review-slot__glyph/);
+  assert.match(vocabularyPageSource, /safeValue\[globalIndex\]\s*\?\?\s*"_"/);
+  assert.match(slotRule, /position:\s*relative;/);
+  assert.match(slotRule, /width:\s*1em;/);
+  assert.match(glyphRule, /font:\s*inherit;/);
+  assert.match(glyphRule, /line-height:\s*inherit;/);
+  assert.match(slotControlRule, /position:\s*absolute;/);
+  assert.match(slotControlRule, /opacity:\s*0;/);
+});
 
 test("missing word characters have room for wide glyphs and share one baseline", () => {
   const wordFillRule = getRuleBody(".vocab-review-inline-fill--word");
