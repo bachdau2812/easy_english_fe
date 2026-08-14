@@ -7937,13 +7937,13 @@ input {
   outline: 0;
   padding: 0;
   text-align: center;
-  width: 1em;
 }
 
 .vocab-review-slot-input__control {
   inset: 0;
   opacity: 0;
   position: absolute;
+  width: 100%;
 }
 
 .vocab-review-slot {
@@ -7951,7 +7951,6 @@ input {
   font: inherit;
   line-height: inherit;
   position: relative;
-  width: 1em;
 }
 
 .vocab-review-slot__glyph {
@@ -7960,7 +7959,6 @@ input {
   line-height: inherit;
   text-align: center;
   vertical-align: baseline;
-  width: 100%;
 }
 
 .vocab-review-slot__glyph.is-active,

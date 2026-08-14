@@ -37,17 +37,19 @@ test("review slots paint entered characters in a baseline-aligned glyph layer", 
   assert.match(renderSlotInputSource, /ref=\{/);
   assert.match(renderSlotInputSource, /value=\{safeValue\[globalIndex\] \?\? ""\}/);
   assert.match(slotRule, /position:\s*relative;/);
-  assert.match(slotRule, /width:\s*1em;/);
+  assert.doesNotMatch(slotRule, /width:\s*1em;/);
   assert.match(glyphRule, /display:\s*inline-block;/);
   assert.match(glyphRule, /font:\s*inherit;/);
   assert.match(glyphRule, /line-height:\s*inherit;/);
   assert.match(glyphRule, /vertical-align:\s*baseline;/);
+  assert.doesNotMatch(glyphRule, /width:\s*(?:1em|100%);/);
   assert.match(focusedGlyphRule, /text-shadow:\s*0 8px 18px rgba\(15, 23, 42, 0\.16\);/);
   assert.match(slotControlRule, /position:\s*absolute;/);
   assert.match(slotControlRule, /opacity:\s*0;/);
+  assert.match(slotControlRule, /width:\s*100%;/);
 });
 
-test("missing word characters have room for wide glyphs and share one baseline", () => {
+test("missing word characters use natural glyph spacing and share one baseline", () => {
   const wordFillRule = getRuleBody(".vocab-review-inline-fill--word");
   const maskedWordRule = getRuleBody(".vocab-review-inline-fill__word");
   const slotGroupRule = getRuleBody(".vocab-review-slot-input");
@@ -61,13 +63,12 @@ test("missing word characters have room for wide glyphs and share one baseline",
   assert.match(slotGroupRule, /gap:\s*0;/);
   assert.match(slotControlRule, /height:\s*1\.2em;/);
   assert.match(slotControlRule, /line-height:\s*1\.2;/);
-  assert.match(slotControlRule, /width:\s*1em;/);
 });
 
 test("sentence blank characters also have room for wide glyphs", () => {
-  const slotControlRule = getRuleBody(".vocab-review-inline-fill input");
+  const slotControlRule = getRuleBody(".vocab-review-slot-input__control");
 
-  assert.match(slotControlRule, /width:\s*1em;/);
+  assert.match(slotControlRule, /width:\s*100%;/);
   assert.doesNotMatch(slotControlRule, /width:\s*0\.68em;/);
 });
 
