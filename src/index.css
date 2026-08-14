@@ -7962,7 +7962,8 @@ input {
   width: 100%;
 }
 
-.vocab-review-slot__glyph.is-active {
+.vocab-review-slot__glyph.is-active,
+.vocab-review-slot:focus-within .vocab-review-slot__glyph {
   color: #111827;
   text-shadow: 0 8px 18px rgba(15, 23, 42, 0.16);
 }

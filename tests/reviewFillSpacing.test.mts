@@ -13,19 +13,34 @@ const getRuleBody = (selector: string) => {
   return css.match(new RegExp(`${escapedSelector}\\s*\\{([^}]+)\\}`))?.[1] ?? "";
 };
 
+const renderSlotInputStart = vocabularyPageSource.indexOf("const renderSlotInput");
+const renderSlotInputEnd = vocabularyPageSource.indexOf("\n  let consumedBlankCount", renderSlotInputStart);
+const renderSlotInputSource = vocabularyPageSource.slice(renderSlotInputStart, renderSlotInputEnd);
+
 test("review slots paint entered characters in a baseline-aligned glyph layer", () => {
   const slotRule = getRuleBody(".vocab-review-slot");
   const glyphRule = getRuleBody(".vocab-review-slot__glyph");
+  const focusedGlyphRule = getRuleBody(".vocab-review-slot:focus-within .vocab-review-slot__glyph");
   const slotControlRule = getRuleBody(".vocab-review-slot-input__control");
 
-  assert.match(vocabularyPageSource, /className="vocab-review-slot"/);
-  assert.match(vocabularyPageSource, /aria-hidden="true"/);
-  assert.match(vocabularyPageSource, /vocab-review-slot__glyph/);
-  assert.match(vocabularyPageSource, /safeValue\[globalIndex\]\s*\?\?\s*"_"/);
+  assert.match(renderSlotInputSource, /className="vocab-review-slot"/);
+  assert.match(renderSlotInputSource, /aria-hidden="true"/);
+  assert.match(renderSlotInputSource, /vocab-review-slot__glyph/);
+  assert.match(renderSlotInputSource, /safeValue\[globalIndex\]\s*\?\?\s*"_"/);
+  assert.match(renderSlotInputSource, /aria-label=\{`\$\{ariaLabel\} \$\{globalIndex \+ 1\}`\}/);
+  assert.match(renderSlotInputSource, /disabled=\{disabled\}/);
+  assert.match(renderSlotInputSource, /maxLength=\{1\}/);
+  assert.match(renderSlotInputSource, /onChange=\{/);
+  assert.match(renderSlotInputSource, /onFocus=\{/);
+  assert.match(renderSlotInputSource, /onKeyDown=\{/);
+  assert.match(renderSlotInputSource, /onPaste=\{/);
+  assert.match(renderSlotInputSource, /ref=\{/);
+  assert.match(renderSlotInputSource, /value=\{safeValue\[globalIndex\] \?\? ""\}/);
   assert.match(slotRule, /position:\s*relative;/);
   assert.match(slotRule, /width:\s*1em;/);
   assert.match(glyphRule, /font:\s*inherit;/);
   assert.match(glyphRule, /line-height:\s*inherit;/);
+  assert.match(focusedGlyphRule, /text-shadow:\s*0 8px 18px rgba\(15, 23, 42, 0\.16\);/);
   assert.match(slotControlRule, /position:\s*absolute;/);
   assert.match(slotControlRule, /opacity:\s*0;/);
 });
