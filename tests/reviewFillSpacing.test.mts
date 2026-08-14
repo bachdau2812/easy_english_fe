@@ -63,6 +63,7 @@ test("missing word characters use natural glyph spacing and share one baseline",
   assert.match(slotGroupRule, /gap:\s*0;/);
   assert.match(slotControlRule, /height:\s*1\.2em;/);
   assert.match(slotControlRule, /line-height:\s*1\.2;/);
+  assert.doesNotMatch(slotControlRule, /width:\s*1em;/);
 });
 
 test("sentence blank characters also have room for wide glyphs", () => {
