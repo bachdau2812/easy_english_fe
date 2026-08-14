@@ -8000,7 +8000,7 @@ input {
 }
 
 .vocab-review-inline-fill--word {
-  align-items: center;
+  align-items: baseline;
   display: flex;
   flex-wrap: nowrap;
   font-size: clamp(1.22rem, 1.04rem + 0.82vw, 1.9rem);
@@ -8017,9 +8017,9 @@ input {
 }
 
 .vocab-review-inline-fill__word {
-  align-items: center;
+  align-items: baseline;
   display: inline-flex;
-  vertical-align: middle;
+  vertical-align: baseline;
   white-space: nowrap;
 }
 
@@ -8031,13 +8031,13 @@ input {
   box-shadow: none;
   color: #111827;
   font: inherit;
-  height: 1.35em;
+  height: 1.2em;
   line-height: 1.2;
   min-height: 0;
   outline: 0;
   padding: 0;
   text-align: center;
-  width: 0.68em;
+  width: 1em;
 }
 
 .vocab-review-inline-fill .vocab-review-slot-input__control:focus {
@@ -8057,19 +8057,15 @@ input {
 }
 
 .vocab-review-slot-input {
-  align-items: center;
+  align-items: baseline;
   display: inline-flex;
   gap: 0;
   max-width: 100%;
-  vertical-align: middle;
+  vertical-align: baseline;
 }
 
 .vocab-review-inline-fill--word .vocab-review-slot-input {
   gap: 0;
-}
-
-.vocab-review-inline-fill--word .vocab-review-slot-input__control {
-  width: 0.68em;
 }
 
 .vocab-review-slot-input__control:focus {
