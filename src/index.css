@@ -7955,10 +7955,11 @@ input {
 }
 
 .vocab-review-slot__glyph {
-  display: block;
+  display: inline-block;
   font: inherit;
   line-height: inherit;
   text-align: center;
+  vertical-align: baseline;
   width: 100%;
 }
 

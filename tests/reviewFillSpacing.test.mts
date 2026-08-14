@@ -38,8 +38,10 @@ test("review slots paint entered characters in a baseline-aligned glyph layer", 
   assert.match(renderSlotInputSource, /value=\{safeValue\[globalIndex\] \?\? ""\}/);
   assert.match(slotRule, /position:\s*relative;/);
   assert.match(slotRule, /width:\s*1em;/);
+  assert.match(glyphRule, /display:\s*inline-block;/);
   assert.match(glyphRule, /font:\s*inherit;/);
   assert.match(glyphRule, /line-height:\s*inherit;/);
+  assert.match(glyphRule, /vertical-align:\s*baseline;/);
   assert.match(focusedGlyphRule, /text-shadow:\s*0 8px 18px rgba\(15, 23, 42, 0\.16\);/);
   assert.match(slotControlRule, /position:\s*absolute;/);
   assert.match(slotControlRule, /opacity:\s*0;/);
