@@ -715,7 +715,6 @@ export const VocabularyTopicWordsPage = () => {
   const [words, setWords] = useState<Word[]>([]);
   const [modalWord, setModalWord] = useState<WordResponse | null>(null);
   const [wordFilter, setWordFilter] = useState("");
-  const [selectedWordIds, setSelectedWordIds] = useState<string[]>([]);
   const normalizedWordFilter = wordFilter.trim().toLowerCase();
 
   const categories = useQuery({
@@ -770,12 +769,6 @@ export const VocabularyTopicWordsPage = () => {
     setWords((current) => (page === 0 ? currentContent : [...current, ...currentContent]));
   }, [currentContent, page, topicWords.data]);
 
-  const toggleWordSelection = (wordId: string) => {
-    setSelectedWordIds((current) =>
-      current.includes(wordId) ? current.filter((id) => id !== wordId) : [...current, wordId]
-    );
-  };
-
   if (!auth.isAuthenticated) {
     return (
       <ExploreChrome compactTitle="Topic words">
@@ -808,18 +801,11 @@ export const VocabularyTopicWordsPage = () => {
                   setPage(0);
                   setWords([]);
                 }}
-                placeholder="Find a word for your quiz set"
+                placeholder="Search word by topic"
                 type="search"
                 value={wordFilter}
               />
             </label>
-            <div className="vocab-topic-selection-pill">
-              <strong>{selectedWordIds.length}</strong>
-              selected
-            </div>
-            <button disabled={selectedWordIds.length === 0} type="button">
-              Build quiz later
-            </button>
           </div>
 
           <div className="vocab-word-list-frame">
@@ -829,33 +815,16 @@ export const VocabularyTopicWordsPage = () => {
               ) : null}
               {topicWords.error ? <div className="vocab-route-error">{getSafeErrorMessage(topicWords.error)}</div> : null}
 
-              <div className="vocab-word-rows vocab-word-rows--selectable">
-                {visibleWords.map((word) => {
-                  const wordId = word.id ?? "";
-
-                  return (
-                    <article key={word.id ?? word.word}>
-                      <label className="vocab-word-row__select">
-                        <input
-                          checked={Boolean(word.id && selectedWordIds.includes(word.id))}
-                          disabled={!word.id}
-                          onChange={() => {
-                            if (wordId) {
-                              toggleWordSelection(wordId);
-                            }
-                          }}
-                          type="checkbox"
-                        />
-                        <span aria-hidden="true" />
-                      </label>
+              <div className="vocab-word-rows">
+                {visibleWords.map((word) => (
+                  <article key={word.id ?? word.word}>
                       <strong>{word.word ?? word.normalizedWord}</strong>
                       <span>{word.pos ?? "word"}</span>
                       <button disabled={openWord.isPending} onClick={() => openWord.mutate(word)} type="button">
                         See more
                       </button>
-                    </article>
-                  );
-                })}
+                  </article>
+                ))}
               </div>
 
               {!topicWords.isLoading && visibleWords.length === 0 ? (
