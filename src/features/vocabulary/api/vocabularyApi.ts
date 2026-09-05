@@ -1,6 +1,6 @@
-import type { PageResponse } from "../../../shared/api/apiResponse.ts";
-import { apiClient } from "../../../shared/api/apiClient.ts";
-import type { WordResponse } from "../../dictionary/types.ts";
+import type { PageResponse } from "../../../shared/api/apiResponse";
+import { apiClient } from "../../../shared/api/apiClient";
+import type { WordResponse } from "../../dictionary/types";
 import type {
   UserSearchHistoryRequest,
   UserSearchHistoryResponse,
@@ -9,7 +9,7 @@ import type {
   UserVocabularyRequest,
   UserVocabularyResponse,
   UserVocabularySearchResponse
-} from "../types.ts";
+} from "../types";
 
 export const vocabularyApi = {
   saveVocabulary(payload: UserVocabularyRequest) {

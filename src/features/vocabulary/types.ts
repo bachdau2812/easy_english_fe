@@ -1,6 +1,6 @@
-import type { PageResponse } from "../../shared/api/apiResponse.ts";
-import type { ISODateString, UUID } from "../../shared/types/common.ts";
-import type { WordResponse } from "../dictionary/types.ts";
+import type { PageResponse } from "../../shared/api/apiResponse";
+import type { ISODateString, UUID } from "../../shared/types/common";
+import type { WordResponse } from "../dictionary/types";
 
 export interface UserVocabularyResponse {
   id?: UUID | null;
