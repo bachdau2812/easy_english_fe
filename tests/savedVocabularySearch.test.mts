@@ -70,16 +70,24 @@ test("saved vocabulary search api method sends query params without userId", asy
   assert.doesNotMatch(methodSource, /\buserId\b/);
 });
 
-test("saved vocabulary search query key includes text, autocomplete mode, page, and limit", () => {
-  assert.deepEqual(
-    queryKeys.savedVocabularySearch(" saved ", true, 0, 20),
-    ["vocabulary", "saved-search", " saved ", true, 0, 20]
-  );
+test("saved vocabulary search query key partitions otherwise identical searches by user", () => {
+  const firstUserKey = queryKeys.savedVocabularySearch("user-1", " saved ", true, 0, 20);
+  const secondUserKey = queryKeys.savedVocabularySearch("user-2", " saved ", true, 0, 20);
+
+  assert.deepEqual(firstUserKey, ["vocabulary", "saved-search", "user-1", " saved ", true, 0, 20]);
+  assert.notDeepEqual(firstUserKey, secondUserKey);
 });
 
-test("saved search hook debounces normalized text and enables at two characters", () => {
+test("saved search hook debounces normalized text and gates user-partitioned queries on authentication", () => {
+  assert.match(hookSource, /import \{ useAuth \} from "\.\.\/\.\.\/auth\/hooks\/useAuth";/);
+  assert.match(hookSource, /const auth = useAuth\(\);/);
   assert.match(hookSource, /useDebounce\(normalizedText, SAVED_VOCABULARY_SEARCH_DEBOUNCE_MS\)/);
   assert.match(hookSource, /debouncedText\.length >= SAVED_VOCABULARY_SEARCH_MIN_LENGTH/);
+  assert.match(hookSource, /enabled:\s*Boolean\(auth\.isAuthenticated && auth\.userId && isEligible\)/);
+  assert.match(
+    hookSource,
+    /queryKey:\s*queryKeys\.savedVocabularySearch\(auth\.userId, debouncedText, true, 0, 20\)/
+  );
   assert.match(hookSource, /isAutocomplete:\s*true/);
   assert.match(hookSource, /page:\s*0/);
   assert.match(hookSource, /limit:\s*20/);
@@ -95,6 +103,26 @@ test("saved search component exposes accessible listbox keyboard behavior", () =
   assert.match(componentSource, /event\.key === "Enter"/);
   assert.match(componentSource, /event\.key === "Escape"/);
   assert.match(componentSource, /onSelect\(result\.word\)/);
+});
+
+test("saved search keeps active options visible with nearest scrolling", () => {
+  assert.match(
+    componentSource,
+    /const optionRefs = useRef<Array<HTMLButtonElement \| null>>\(\[\]\);/
+  );
+  assert.match(
+    componentSource,
+    /optionRefs\.current\[activeIndex\]\?\.scrollIntoView\(\{ block: "nearest" \}\);/
+  );
+  assert.match(
+    componentSource,
+    /ref=\{\(option\) => \{\s*optionRefs\.current\[index\] = option;\s*\}\}/
+  );
+});
+
+test("saved search announces loading, empty, and error states", () => {
+  assert.equal(componentSource.match(/role="status"/g)?.length, 2);
+  assert.equal(componentSource.match(/role="alert"/g)?.length, 1);
 });
 
 test("saved search dismissal clears the active option reference", () => {

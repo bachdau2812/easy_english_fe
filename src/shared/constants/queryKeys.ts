@@ -7,8 +7,13 @@ export const queryKeys = {
   searchHistory: (userId?: string | null) => ["search", "history", userId] as const,
   savedVocabularies: (userId?: string | null, level?: number, page?: number, limit?: number) =>
     ["vocabulary", "saved", userId, level, page, limit] as const,
-  savedVocabularySearch: (text: string, isAutocomplete: boolean, page: number, limit: number) =>
-    ["vocabulary", "saved-search", text, isAutocomplete, page, limit] as const,
+  savedVocabularySearch: (
+    userId: string | null,
+    text: string,
+    isAutocomplete: boolean,
+    page: number,
+    limit: number
+  ) => ["vocabulary", "saved-search", userId, text, isAutocomplete, page, limit] as const,
   vocabularyInfo: (userId?: string | null, infoType?: string | null) =>
     ["vocabulary", "info", userId, infoType] as const,
   reviewSession: (userId?: string | null, totalReviewVocab?: number) =>

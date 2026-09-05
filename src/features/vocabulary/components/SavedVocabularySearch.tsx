@@ -17,6 +17,7 @@ interface SavedVocabularySearchProps {
 
 export const SavedVocabularySearch = ({ onSelect }: SavedVocabularySearchProps) => {
   const rootRef = useRef<HTMLDivElement>(null);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const listboxId = `saved-vocabulary-search-${useId().replace(/:/g, "")}`;
   const [text, setText] = useState("");
   const [isOpen, setIsOpen] = useState(false);
@@ -38,6 +39,11 @@ export const SavedVocabularySearch = ({ onSelect }: SavedVocabularySearchProps) 
   useClickOutside(rootRef, dismissDropdown);
 
   useEffect(() => setActiveIndex(-1), [search.data, text]);
+
+  useEffect(() => {
+    if (activeIndex < 0 || activeIndex >= results.length) return;
+    optionRefs.current[activeIndex]?.scrollIntoView({ block: "nearest" });
+  }, [activeIndex, results.length]);
 
   const selectResult = (result: UserVocabularySearchResponse) => {
     onSelect(result.word);
@@ -88,14 +94,20 @@ export const SavedVocabularySearch = ({ onSelect }: SavedVocabularySearchProps) 
       </label>
       {isOpen && isEligible ? (
         <div className="vocab-saved-search__dropdown" id={listboxId} role="listbox">
-          {isLoading ? <p className="vocab-saved-search__state">Searching saved vocabulary...</p> : null}
+          {isLoading ? (
+            <p className="vocab-saved-search__state" role="status">
+              Searching saved vocabulary...
+            </p>
+          ) : null}
           {!isLoading && search.error ? (
-            <p className="vocab-saved-search__state vocab-saved-search__state--error">
+            <p className="vocab-saved-search__state vocab-saved-search__state--error" role="alert">
               {getSafeErrorMessage(search.error)}
             </p>
           ) : null}
           {!isLoading && !search.error && search.data && results.length === 0 ? (
-            <p className="vocab-saved-search__state">No saved vocabulary found</p>
+            <p className="vocab-saved-search__state" role="status">
+              No saved vocabulary found
+            </p>
           ) : null}
           {!isLoading && !search.error
             ? results.map((result, index) => (
@@ -106,6 +118,9 @@ export const SavedVocabularySearch = ({ onSelect }: SavedVocabularySearchProps) 
                   key={result.userVocabulary.id ?? `${result.word.word}-${index}`}
                   onClick={() => selectResult(result)}
                   onMouseEnter={() => setActiveIndex(index)}
+                  ref={(option) => {
+                    optionRefs.current[index] = option;
+                  }}
                   role="option"
                   type="button"
                 >
