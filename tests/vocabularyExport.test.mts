@@ -11,6 +11,18 @@ const apiClientSource = readFileSync(
   "utf8"
 );
 
+const vocabularyApiSource = readFileSync(
+  new URL("../src/features/vocabulary/api/vocabularyApi.ts", import.meta.url),
+  "utf8"
+);
+
+const pageSource = readFileSync(
+  new URL("../src/features/vocabulary/pages/VocabularyExplorePage.tsx", import.meta.url),
+  "utf8"
+);
+
+const cssSource = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
+
 test("download filename supports UTF-8 and quoted content disposition values", () => {
   assert.equal(
     getDownloadFilename("attachment; filename*=UTF-8''my%20vocabulary.xlsx"),
@@ -69,4 +81,42 @@ test("api client downloads a successful response as Blob and preserves auth fail
   );
   assert.match(downloadSource, /isUnauthenticatedResponse/);
   assert.match(downloadSource, /emitAuthRequired/);
+});
+
+test("vocabulary export requests Vietnamese Excel without userId", () => {
+  const exportMethodSource = vocabularyApiSource.match(
+    /exportSavedVocabularies\(langCode = "vi"\)[\s\S]*?\n  },/
+  )?.[0] ?? "";
+
+  assert.notEqual(exportMethodSource, "");
+  assert.match(exportMethodSource, /apiClient\.download\("\/user-vocabularies\/export"/);
+  assert.match(exportMethodSource, /query:\s*\{ langCode \}/);
+  assert.doesNotMatch(exportMethodSource, /userId/);
+});
+
+test("My Vocabulary disables export while pending and reports download errors", () => {
+  assert.match(pageSource, /const exportVocabulary = useMutation\(\{/);
+  assert.match(pageSource, /vocabularyApi\.exportSavedVocabularies\("vi"\)/);
+  assert.match(
+    pageSource,
+    /triggerBlobDownload\(blob, filename \?\? "my-vocabulary\.xlsx"\)/
+  );
+  assert.match(pageSource, /disabled=\{exportVocabulary\.isPending\}/);
+  assert.match(pageSource, /onClick=\{\(\) => exportVocabulary\.mutate\(\)\}/);
+  assert.match(
+    pageSource,
+    /exportVocabulary\.isPending \? "Exporting\.\.\." : "Export vocabulary"/
+  );
+  assert.match(pageSource, /getSafeErrorMessage\(exportVocabulary\.error\)/);
+});
+
+test("export action is centered after the complete level list", () => {
+  assert.match(
+    pageSource,
+    /<div className="vocab-saved-level-list">[\s\S]*?<\/div>\s*<div className="vocab-saved-export">/
+  );
+  assert.match(
+    cssSource,
+    /\.vocab-saved-export\s*\{[\s\S]*?align-items:\s*center/
+  );
 });

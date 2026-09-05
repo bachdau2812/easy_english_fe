@@ -41,6 +41,11 @@ export const vocabularyApi = {
   getSavedVocabularyWord(userVocabId: string) {
     return apiClient.get<WordResponse>(`/user-vocabularies/${userVocabId}/word`);
   },
+  exportSavedVocabularies(langCode = "vi") {
+    return apiClient.download("/user-vocabularies/export", {
+      query: { langCode }
+    });
+  },
   searchSavedVocabularies(params: {
     text: string;
     isAutocomplete: boolean;

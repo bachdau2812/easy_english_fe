@@ -2,6 +2,7 @@ import { ReactNode, useEffect, useRef, useState } from "react";
 import { keepPreviousData, useMutation, useQuery } from "@tanstack/react-query";
 import { useNavigate, useParams } from "react-router-dom";
 import { getSafeErrorMessage } from "../../../shared/api/apiError";
+import { triggerBlobDownload } from "../../../shared/api/fileDownload";
 import { AuthRequiredNotice } from "../../../shared/components/AuthRequiredNotice";
 import { queryKeys } from "../../../shared/constants/queryKeys";
 import { ROUTES } from "../../../shared/constants/routes";
@@ -1270,6 +1271,12 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
     mutationFn: (userVocabId: string) => vocabularyApi.getSavedVocabularyWord(userVocabId),
     onSuccess: setSavedModalWord
   });
+  const exportVocabulary = useMutation({
+    mutationFn: () => vocabularyApi.exportSavedVocabularies("vi"),
+    onSuccess: ({ blob, filename }) => {
+      triggerBlobDownload(blob, filename ?? "my-vocabulary.xlsx");
+    }
+  });
 
   const activeStatistic = activeSection === "daily" ? daily.data : activeSection === "overall" ? overall.data : null;
   const activeStatisticError = activeSection === "daily" ? daily.error : activeSection === "overall" ? overall.error : null;
@@ -1675,6 +1682,20 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
                             <strong>{formatStatNumber(levelInfo.quantity)}</strong>
                           </button>
                         ))}
+                      </div>
+                      <div className="vocab-saved-export">
+                        <button
+                          disabled={exportVocabulary.isPending}
+                          onClick={() => exportVocabulary.mutate()}
+                          type="button"
+                        >
+                          {exportVocabulary.isPending ? "Exporting..." : "Export vocabulary"}
+                        </button>
+                        {exportVocabulary.error ? (
+                          <p className="vocab-saved-inline-state vocab-saved-inline-state--error">
+                            {getSafeErrorMessage(exportVocabulary.error)}
+                          </p>
+                        ) : null}
                       </div>
                     </>
                   ) : null}
