@@ -2,7 +2,6 @@ import { KeyboardEvent, useEffect, useId, useRef, useState } from "react";
 import { getSafeErrorMessage } from "../../../shared/api/apiError";
 import { useClickOutside } from "../../../shared/hooks/useClickOutside";
 import { normalizeSearchText } from "../../../shared/utils/normalize";
-import { WordResponse } from "../../dictionary/types";
 import { HomeIcon } from "../../home/components/HomeIcon";
 import { useSavedVocabularySearch } from "../hooks/useSavedVocabularySearch";
 import {
@@ -12,7 +11,7 @@ import {
 import { UserVocabularySearchResponse } from "../types";
 
 interface SavedVocabularySearchProps {
-  onSelect: (word: WordResponse) => void;
+  onSelect: (userVocabId: string) => void;
 }
 
 export const SavedVocabularySearch = ({ onSelect }: SavedVocabularySearchProps) => {
@@ -27,7 +26,7 @@ export const SavedVocabularySearch = ({ onSelect }: SavedVocabularySearchProps) 
   const results = search.isDebouncing
     ? []
     : (search.data?.content ?? []).filter((result) =>
-        Boolean(result.word?.word ?? result.word?.normalizedWord)
+        Boolean(result.userVocabId && result.word?.trim())
       );
   const isLoading = search.isDebouncing || search.isFetching;
 
@@ -46,8 +45,8 @@ export const SavedVocabularySearch = ({ onSelect }: SavedVocabularySearchProps) 
   }, [activeIndex, results.length]);
 
   const selectResult = (result: UserVocabularySearchResponse) => {
-    onSelect(result.word);
     dismissDropdown();
+    onSelect(result.userVocabId);
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
@@ -115,7 +114,7 @@ export const SavedVocabularySearch = ({ onSelect }: SavedVocabularySearchProps) 
                   aria-selected={activeIndex === index}
                   className={activeIndex === index ? "vocab-saved-search__option is-active" : "vocab-saved-search__option"}
                   id={`${listboxId}-option-${index}`}
-                  key={result.userVocabulary.id ?? `${result.word.word}-${index}`}
+                  key={result.userVocabId}
                   onClick={() => selectResult(result)}
                   onMouseEnter={() => setActiveIndex(index)}
                   ref={(option) => {
@@ -125,10 +124,10 @@ export const SavedVocabularySearch = ({ onSelect }: SavedVocabularySearchProps) 
                   type="button"
                 >
                   <span>
-                    <strong>{result.word.word ?? result.word.normalizedWord}</strong>
-                    <small>{result.word.pos ?? "word"}</small>
+                    <strong>{result.word}</strong>
+                    <small>{result.pos ?? "word"}</small>
                   </span>
-                  {result.userVocabulary.level ? <em>Level {result.userVocabulary.level}</em> : null}
+                  {result.level ? <em>Level {result.level}</em> : null}
                 </button>
               ))
             : null}

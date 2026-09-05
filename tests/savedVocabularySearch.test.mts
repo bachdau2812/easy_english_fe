@@ -47,10 +47,16 @@ test("saved vocabulary search constants and keyboard wrapping stay fixed", () =>
   assert.equal(getNextSavedVocabularySearchIndex(0, 4, -1), 3);
 });
 
-test("saved vocabulary search response contract includes userVocabulary and word", () => {
-  assert.match(vocabularyTypesSource, /export interface UserVocabularySearchResponse\s*{/);
-  assert.match(vocabularyTypesSource, /userVocabulary: UserVocabularyResponse;/);
-  assert.match(vocabularyTypesSource, /word: WordResponse;/);
+test("saved vocabulary search response exposes lightweight flat metadata", () => {
+  const contract = vocabularyTypesSource.match(
+    /export interface UserVocabularySearchResponse\s*\{[\s\S]*?\n\}/
+  )?.[0] ?? "";
+
+  assert.match(contract, /userVocabId: UUID;/);
+  assert.match(contract, /word: string;/);
+  assert.match(contract, /level: number;/);
+  assert.match(contract, /pos: string;/);
+  assert.doesNotMatch(contract, /userVocabulary|WordResponse/);
 });
 
 test("saved vocabulary search api method sends query params without userId", async () => {
@@ -102,7 +108,13 @@ test("saved search component exposes accessible listbox keyboard behavior", () =
   assert.match(componentSource, /ArrowUp/);
   assert.match(componentSource, /event\.key === "Enter"/);
   assert.match(componentSource, /event\.key === "Escape"/);
-  assert.match(componentSource, /onSelect\(result\.word\)/);
+  assert.match(componentSource, /onSelect:\s*\(userVocabId: string\) => void/);
+  assert.match(componentSource, /onSelect\(result\.userVocabId\)/);
+  assert.doesNotMatch(componentSource, /onSelect\(result\.word\)/);
+  assert.match(componentSource, /key=\{result\.userVocabId\}/);
+  assert.match(componentSource, /<strong>\{result\.word\}<\/strong>/);
+  assert.match(componentSource, /<small>\{result\.pos \?\? "word"\}<\/small>/);
+  assert.match(componentSource, /Level \{result\.level\}/);
 });
 
 test("saved search keeps active options visible with nearest scrolling", () => {
@@ -132,12 +144,30 @@ test("saved search dismissal clears the active option reference", () => {
   );
   assert.match(componentSource, /useClickOutside\(rootRef, dismissDropdown\)/);
   assert.match(componentSource, /if \(event\.key === "Escape"\) \{\s*dismissDropdown\(\)/);
-  assert.match(componentSource, /onSelect\(result\.word\);\s*dismissDropdown\(\)/);
+  assert.match(componentSource, /dismissDropdown\(\);\s*onSelect\(result\.userVocabId\)/);
 });
 
-test("level overview connects embedded search words to the existing modal", () => {
-  assert.match(pageSource, /<SavedVocabularySearch onSelect=\{setSavedModalWord\}/);
+test("search selection loads saved-word detail through the existing mutation", () => {
+  assert.match(
+    pageSource,
+    /<SavedVocabularySearch\s+onSelect=\{\(userVocabId\) => openSavedWord\.mutate\(userVocabId\)\}\s*\/>/
+  );
+  assert.match(
+    pageSource,
+    /const openSavedWord = useMutation\(\{[\s\S]*?getSavedVocabularyWord\(userVocabId\)[\s\S]*?onSuccess: setSavedModalWord/
+  );
   assert.match(pageSource, /word=\{savedModalWord\}/);
+  assert.doesNotMatch(pageSource, /<SavedVocabularySearch onSelect=\{setSavedModalWord\}/);
+});
+
+test("saved-word detail errors are visible from the level overview", () => {
+  const listSection = pageSource.match(
+    /\{activeSection === "list" \? \([\s\S]*?\{activeSection === "review"/
+  )?.[0] ?? "";
+
+  assert.match(listSection, /openSavedWord\.error/);
+  assert.match(listSection, /getSafeErrorMessage\(openSavedWord\.error\)/);
+  assert.match(listSection, /\)\}\s*\{openSavedWord\.error \? \(/);
 });
 
 test("saved search toolbar aligns total and search and stacks responsively", () => {

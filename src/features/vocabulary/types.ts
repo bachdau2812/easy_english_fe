@@ -53,8 +53,10 @@ export interface UserSearchHistoryRequest {
 }
 
 export interface UserVocabularySearchResponse {
-  userVocabulary: UserVocabularyResponse;
-  word: WordResponse;
+  userVocabId: UUID;
+  word: string;
+  level: number;
+  pos: string;
 }
 
 export type SavedVocabularyPageResponse = PageResponse<UserVocabularyResponse>;

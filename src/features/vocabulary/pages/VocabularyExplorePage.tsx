@@ -1656,7 +1656,9 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
                           <span>Total</span>
                           <strong>{formatStatNumber(vocabularyQuantity.data.totalQuantity)}</strong>
                         </div>
-                        <SavedVocabularySearch onSelect={setSavedModalWord} />
+                        <SavedVocabularySearch
+                          onSelect={(userVocabId) => openSavedWord.mutate(userVocabId)}
+                        />
                       </div>
                       <div className="vocab-saved-level-list">
                         {vocabularyLevelQuantities.map((levelInfo) => (
@@ -1754,9 +1756,13 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
                       ) : null}
                     </>
                   ) : null}
-                  {openSavedWord.error ? <p>{getSafeErrorMessage(openSavedWord.error)}</p> : null}
                 </div>
               )}
+              {openSavedWord.error ? (
+                <p className="vocab-saved-inline-state vocab-saved-inline-state--error">
+                  {getSafeErrorMessage(openSavedWord.error)}
+                </p>
+              ) : null}
               <HomeWordDetailModal
                 onClose={() => setSavedModalWord(null)}
                 onRequireAuth={() => undefined}
