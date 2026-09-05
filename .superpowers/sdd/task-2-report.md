@@ -67,3 +67,41 @@ Note: direct `npm run build` was blocked by the local PowerShell execution polic
 ## Concerns
 
 None. The environment-specific npm PowerShell policy issue is documented above; `npm.cmd` verification succeeded.
+
+## Review Fix Addendum
+
+The dropdown now routes selection, Escape, and click-outside through `dismissDropdown`, which closes the list and resets `activeIndex` to `-1`. This prevents `aria-activedescendant` from referring to an unmounted option.
+
+### TDD RED
+
+Command:
+
+```powershell
+node --experimental-strip-types --test tests/savedVocabularySearch.test.mts
+```
+
+Result: exit code 1. Six existing tests passed and the new `saved search dismissal clears the active option reference` assertion failed because the dismissal helper and reset calls were absent.
+
+### Verification after fix
+
+```powershell
+node --experimental-strip-types --test tests/savedVocabularySearch.test.mts
+```
+
+Result: exit code 0. All 7 focused tests passed; 0 failed, 0 skipped, 0 todo.
+
+```powershell
+npm.cmd test
+```
+
+Result: exit code 0. All 94 tests passed; 0 failed, 0 skipped, 0 todo.
+
+```powershell
+npm.cmd run build
+```
+
+Result: exit code 0. TypeScript compilation and Vite production build completed successfully.
+
+### Fix commit
+
+`c678d27 Clear saved search active option on dismiss`
