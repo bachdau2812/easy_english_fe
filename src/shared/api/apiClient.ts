@@ -1,5 +1,6 @@
 import { ApiError } from "./apiError";
 import { ApiResponse } from "./apiResponse";
+import { DownloadFileResponse, getDownloadFilename } from "./fileDownload";
 import { env } from "../config/env";
 
 type QueryValue = string | number | boolean | null | undefined;
@@ -131,7 +132,51 @@ const request = async <T>(path: string, options: RequestOptions = {}): Promise<T
   return payload?.result as T;
 };
 
+const downloadFile = async (
+  path: string,
+  options: RequestOptions = {}
+): Promise<DownloadFileResponse> => {
+  const headers = new Headers(options.headers);
+  const token = authTokenStorage.get();
+
+  headers.set("Accept", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+
+  if (options.auth !== false && token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const response = await fetch(buildUrl(path, options.query), {
+    ...options,
+    body: undefined,
+    headers,
+    method: "GET"
+  });
+
+  if (!response.ok) {
+    const payload = await parseResponseBody<never>(response);
+    const error = new ApiError(payload?.message ?? "The request could not be completed.", {
+      status: response.status,
+      code: payload?.code,
+      traceId: payload?.traceId
+    });
+
+    if (isUnauthenticatedResponse(response.status, payload?.code)) {
+      emitAuthRequired(error);
+    }
+
+    throw error;
+  }
+
+  return {
+    blob: await response.blob(),
+    filename: getDownloadFilename(response.headers.get("Content-Disposition"))
+  };
+};
+
 export const apiClient = {
+  download(path: string, options?: RequestOptions) {
+    return downloadFile(path, options);
+  },
   get<T>(path: string, options?: RequestOptions) {
     return request<T>(path, { ...options, method: "GET" });
   },
