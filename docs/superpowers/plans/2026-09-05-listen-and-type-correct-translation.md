@@ -14,6 +14,7 @@
 - Use `currentChallenge.translate` from the lesson-detail response.
 - Show the exact label `Vietnamese meaning`.
 - Hide the entire translation section for missing, null, empty, or whitespace-only values.
+- Use the same font family, font size, and line height as the English answer.
 - Do not wait for the attempt submission or add another API call.
 - Preserve answer matching, popup timing, and Continue navigation.
 - Preserve the user's unrelated `.gitignore` change.
@@ -71,6 +72,18 @@ test("the Vietnamese meaning has dedicated secondary styling", () => {
   );
   assert.match(cssSource, /\.listen-correct-popup__translation small\s*\{/);
   assert.match(cssSource, /\.listen-correct-popup__translation p\s*\{/);
+});
+
+test("the Vietnamese meaning inherits the English answer typography", () => {
+  const translationBodyStyle = cssSource.match(
+    /\.listen-correct-popup__translation p\s*\{[\s\S]*?\n\}/
+  )?.[0] ?? "";
+
+  assert.doesNotMatch(translationBodyStyle, /font-family|font-size|line-height/);
+  assert.match(
+    cssSource,
+    /\.listen-correct-popup p\s*\{[\s\S]*?font-size:\s*clamp\([\s\S]*?line-height:\s*1\.55/
+  );
 });
 ```
 
@@ -130,7 +143,6 @@ Add after the existing Correct popup paragraph rule:
 .listen-correct-popup__translation p {
   background: #f8fafc;
   color: #475569;
-  font-size: 1rem;
 }
 ```
 

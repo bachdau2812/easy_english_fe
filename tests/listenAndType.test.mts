@@ -154,3 +154,15 @@ test("the Vietnamese meaning has dedicated secondary styling", () => {
   assert.match(cssSource, /\.listen-correct-popup__translation small\s*\{/);
   assert.match(cssSource, /\.listen-correct-popup__translation p\s*\{/);
 });
+
+test("the Vietnamese meaning inherits the English answer typography", () => {
+  const translationBodyStyle = cssSource.match(
+    /\.listen-correct-popup__translation p\s*\{[\s\S]*?\n\}/
+  )?.[0] ?? "";
+
+  assert.doesNotMatch(translationBodyStyle, /font-family|font-size|line-height/);
+  assert.match(
+    cssSource,
+    /\.listen-correct-popup p\s*\{[\s\S]*?font-size:\s*clamp\([\s\S]*?line-height:\s*1\.55/
+  );
+});

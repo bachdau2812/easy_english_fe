@@ -28,7 +28,7 @@ The popup continues to open immediately after the local answer check succeeds. I
 - Keep the existing English/canonical answer block unchanged.
 - When `currentChallenge.translate` contains non-whitespace text, render a second block immediately below it.
 - The second block has the exact label **Vietnamese meaning** followed by the trimmed translation.
-- Give the translation block a secondary visual treatment so it is distinct from the English answer while remaining readable on desktop and mobile.
+- Use the same inherited font family, font size, and line height as the English answer. Keep only color and background as the secondary visual treatment.
 - When `translate` is `null`, missing, empty, or whitespace-only, render no translation label or empty container.
 
 ## Scope
