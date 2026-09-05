@@ -7122,6 +7122,123 @@ input {
   width: min(100%, 760px);
 }
 
+.vocab-saved-level-toolbar {
+  align-items: center;
+  background: #eff6ff;
+  border: 1px solid #dbeafe;
+  border-radius: 18px;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
+  padding: 10px 12px 10px 18px;
+}
+
+.vocab-saved-level-toolbar .vocab-saved-level-total {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 6px 0;
+}
+
+.vocab-saved-search {
+  min-width: 0;
+  position: relative;
+}
+
+.vocab-saved-search__field {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #bfdbfe;
+  border-radius: 13px;
+  color: #64748b;
+  display: flex;
+  gap: 9px;
+  min-height: 44px;
+  padding: 0 13px;
+}
+
+.vocab-saved-search__field:focus-within {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+}
+
+.vocab-saved-search__field input {
+  background: transparent;
+  border: 0;
+  color: #172033;
+  font: inherit;
+  min-width: 0;
+  outline: 0;
+  width: 100%;
+}
+
+.vocab-saved-search__dropdown {
+  background: #ffffff;
+  border: 1px solid #dbe3ef;
+  border-radius: 14px;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, 0.16);
+  display: grid;
+  left: 0;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 6px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 20;
+}
+
+.vocab-saved-search__state {
+  color: #64748b;
+  margin: 0;
+  padding: 13px 12px;
+}
+
+.vocab-saved-search__state--error {
+  color: #b91c1c;
+}
+
+.vocab-saved-search__option {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: 10px;
+  color: #172033;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  justify-content: space-between;
+  padding: 10px 11px;
+  text-align: left;
+  width: 100%;
+}
+
+.vocab-saved-search__option:hover,
+.vocab-saved-search__option.is-active {
+  background: #eff6ff;
+}
+
+.vocab-saved-search__option:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: -2px;
+}
+
+.vocab-saved-search__option > span {
+  display: grid;
+  gap: 2px;
+}
+
+.vocab-saved-search__option small {
+  color: #64748b;
+}
+
+.vocab-saved-search__option em {
+  color: #1d4ed8;
+  font-size: 0.78rem;
+  font-style: normal;
+  font-weight: 800;
+}
+
 .vocab-saved-level-total,
 .vocab-saved-level-row {
   align-items: center;
@@ -9237,6 +9354,12 @@ input {
     grid-column: 1;
     grid-row: auto;
     justify-self: start;
+  }
+
+  .vocab-saved-level-toolbar {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+    padding: 12px;
   }
 
   .vocab-saved-level-total,

@@ -37,6 +37,7 @@ import {
 import { UserVocabAttemptResponse, VocabReviewQuizResponse } from "../../review/types";
 import { FloatingVocabularyLookup } from "../../search/components/FloatingVocabularyLookup";
 import { vocabularyApi } from "../api/vocabularyApi";
+import { SavedVocabularySearch } from "../components/SavedVocabularySearch";
 import {
   canReuseSavedVocabularyPage,
   normalizeVocabularyLevelQuantities
@@ -1650,9 +1651,12 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
                   ) : null}
                   {vocabularyQuantity.data ? (
                     <>
-                      <div className="vocab-saved-level-total">
-                        <span>Total vocabulary</span>
-                        <strong>{formatStatNumber(vocabularyQuantity.data.totalQuantity)}</strong>
+                      <div className="vocab-saved-level-toolbar">
+                        <div className="vocab-saved-level-total">
+                          <span>Total vocabulary</span>
+                          <strong>{formatStatNumber(vocabularyQuantity.data.totalQuantity)}</strong>
+                        </div>
+                        <SavedVocabularySearch onSelect={setSavedModalWord} />
                       </div>
                       <div className="vocab-saved-level-list">
                         {vocabularyLevelQuantities.map((levelInfo) => (

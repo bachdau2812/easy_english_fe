@@ -28,6 +28,13 @@ const componentSource = readFileSync(
   "utf8"
 );
 
+const pageSource = readFileSync(
+  new URL("../src/features/vocabulary/pages/VocabularyExplorePage.tsx", import.meta.url),
+  "utf8"
+);
+
+const cssSource = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
+
 test("saved vocabulary search constants and keyboard wrapping stay fixed", () => {
   assert.equal(SAVED_VOCABULARY_SEARCH_MIN_LENGTH, 2);
   assert.equal(SAVED_VOCABULARY_SEARCH_DEBOUNCE_MS, 300);
@@ -98,4 +105,15 @@ test("saved search dismissal clears the active option reference", () => {
   assert.match(componentSource, /useClickOutside\(rootRef, dismissDropdown\)/);
   assert.match(componentSource, /if \(event\.key === "Escape"\) \{\s*dismissDropdown\(\)/);
   assert.match(componentSource, /onSelect\(result\.word\);\s*dismissDropdown\(\)/);
+});
+
+test("level overview connects embedded search words to the existing modal", () => {
+  assert.match(pageSource, /<SavedVocabularySearch onSelect=\{setSavedModalWord\}/);
+  assert.match(pageSource, /word=\{savedModalWord\}/);
+});
+
+test("saved search toolbar aligns total and search and stacks responsively", () => {
+  assert.match(cssSource, /\.vocab-saved-level-toolbar\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\) minmax\(/);
+  assert.match(cssSource, /\.vocab-saved-search__dropdown\s*\{/);
+  assert.match(cssSource, /@media \(max-width: 640px\)[\s\S]*?\.vocab-saved-level-toolbar[\s\S]*?grid-template-columns:\s*1fr/);
 });
