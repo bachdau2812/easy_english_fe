@@ -1652,8 +1652,8 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
                   {vocabularyQuantity.data ? (
                     <>
                       <div className="vocab-saved-level-toolbar">
-                        <div className="vocab-saved-level-total">
-                          <span>Total vocabulary</span>
+                        <div aria-label="Total vocabulary" className="vocab-saved-level-total">
+                          <span>Total</span>
                           <strong>{formatStatNumber(vocabularyQuantity.data.totalQuantity)}</strong>
                         </div>
                         <SavedVocabularySearch onSelect={setSavedModalWord} />

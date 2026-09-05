@@ -86,7 +86,6 @@ export const SavedVocabularySearch = ({ onSelect }: SavedVocabularySearchProps) 
           }}
           onFocus={() => setIsOpen(isEligible)}
           onKeyDown={handleKeyDown}
-          placeholder="Search saved vocabulary"
           role="combobox"
           type="search"
           value={text}

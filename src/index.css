@@ -7137,7 +7137,11 @@ input {
   background: transparent;
   border: 0;
   border-radius: 0;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-start;
   padding: 6px 0;
+  width: max-content;
 }
 
 .vocab-saved-search {
