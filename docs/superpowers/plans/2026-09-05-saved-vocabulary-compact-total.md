@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Remove visible placeholder copy from saved-vocabulary search and render the total as a compact `Total 203` group.
+**Goal:** Remove the separate label text next to saved-vocabulary search and render the total as a compact `Total 203` group.
 
 **Architecture:** Make one copy change in the existing page, one attribute removal in the existing search component, and one narrowly scoped CSS override. Preserve all search behavior and responsive layout.
 
@@ -12,8 +12,9 @@
 
 - The visible total label is exactly `Total`.
 - The total number is exactly `8px` after the label.
-- The search input has no visible placeholder text.
-- The search icon and hidden accessible label remain unchanged.
+- The search input keeps the visible placeholder `Search saved vocabulary`.
+- The search icon remains, while the separate sibling label text is removed.
+- The input has `aria-label="Search saved vocabulary"`.
 - The user explicitly waived new and updated automated tests for this visual adjustment; verification is `npm.cmd run build` plus `git diff --check`.
 
 ---
@@ -27,7 +28,7 @@
 
 **Interfaces:**
 - Consumes: existing `vocabularyQuantity.data.totalQuantity`, `SavedVocabularySearch`, and `.vocab-saved-level-toolbar` layout.
-- Produces: a visible `Total <number>` group and an empty search field that retains its icon and accessible name.
+- Produces: a visible `Total <number>` group and a search field whose placeholder remains inside the input without a separate label next to the icon.
 
 - [ ] **Step 1: Update the visible total copy**
 
@@ -40,18 +41,19 @@ Replace only the visible label while retaining a descriptive accessible name:
 </div>
 ```
 
-- [ ] **Step 2: Remove the search placeholder**
+- [ ] **Step 2: Remove the separate search label and keep the placeholder**
 
-Delete this prop from the existing search input:
-
-```tsx
-placeholder="Search saved vocabulary"
-```
-
-Keep this hidden label unchanged:
+Delete this sibling text node:
 
 ```tsx
 <span className="sr-only">Search saved vocabulary</span>
+```
+
+Keep the placeholder and put the accessible name directly on the input:
+
+```tsx
+aria-label="Search saved vocabulary"
+placeholder="Search saved vocabulary"
 ```
 
 - [ ] **Step 3: Keep the total label and value together**

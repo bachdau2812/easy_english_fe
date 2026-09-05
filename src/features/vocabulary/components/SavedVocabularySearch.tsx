@@ -72,13 +72,13 @@ export const SavedVocabularySearch = ({ onSelect }: SavedVocabularySearchProps) 
   return (
     <div className="vocab-saved-search" ref={rootRef}>
       <label className="vocab-saved-search__field">
-        <span className="sr-only">Search saved vocabulary</span>
         <HomeIcon name="search" size={18} />
         <input
           aria-activedescendant={activeIndex >= 0 ? `${listboxId}-option-${activeIndex}` : undefined}
           aria-autocomplete="list"
           aria-controls={listboxId}
           aria-expanded={isOpen && isEligible}
+          aria-label="Search saved vocabulary"
           onChange={(event) => {
             const nextText = event.target.value;
             setText(nextText);
@@ -86,6 +86,7 @@ export const SavedVocabularySearch = ({ onSelect }: SavedVocabularySearchProps) 
           }}
           onFocus={() => setIsOpen(isEligible)}
           onKeyDown={handleKeyDown}
+          placeholder="Search saved vocabulary"
           role="combobox"
           type="search"
           value={text}
