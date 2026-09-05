@@ -1,14 +1,15 @@
-import { PageResponse } from "../../../shared/api/apiResponse";
-import { apiClient } from "../../../shared/api/apiClient";
-import { WordResponse } from "../../dictionary/types";
-import {
+import type { PageResponse } from "../../../shared/api/apiResponse.ts";
+import { apiClient } from "../../../shared/api/apiClient.ts";
+import type { WordResponse } from "../../dictionary/types.ts";
+import type {
   UserSearchHistoryRequest,
   UserSearchHistoryResponse,
   UserVocabularyInfoResponse,
   UserVocabularyInfoType,
   UserVocabularyRequest,
-  UserVocabularyResponse
-} from "../types";
+  UserVocabularyResponse,
+  UserVocabularySearchResponse
+} from "../types.ts";
 
 export const vocabularyApi = {
   saveVocabulary(payload: UserVocabularyRequest) {
@@ -39,6 +40,23 @@ export const vocabularyApi = {
   },
   getSavedVocabularyWord(userVocabId: string) {
     return apiClient.get<WordResponse>(`/user-vocabularies/${userVocabId}/word`);
+  },
+  searchSavedVocabularies(params: {
+    text: string;
+    isAutocomplete: boolean;
+    page: number;
+    limit: number;
+    signal?: AbortSignal;
+  }) {
+    return apiClient.get<PageResponse<UserVocabularySearchResponse>>("/user-vocabularies/search", {
+      signal: params.signal,
+      query: {
+        text: params.text,
+        isAutocomplete: params.isAutocomplete,
+        page: params.page,
+        limit: params.limit
+      }
+    });
   },
   addSearchHistory(payload: UserSearchHistoryRequest) {
     return apiClient.post<UserSearchHistoryResponse>("/user-vocabularies/search-history", payload);

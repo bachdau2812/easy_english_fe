@@ -1,6 +1,6 @@
-import { PageResponse } from "../../shared/api/apiResponse";
-import { ISODateString, UUID } from "../../shared/types/common";
-import { WordResponse } from "../dictionary/types";
+import type { PageResponse } from "../../shared/api/apiResponse.ts";
+import type { ISODateString, UUID } from "../../shared/types/common.ts";
+import type { WordResponse } from "../dictionary/types.ts";
 
 export interface UserVocabularyResponse {
   id?: UUID | null;
@@ -50,6 +50,11 @@ export interface UserSearchHistoryResponse {
 export interface UserSearchHistoryRequest {
   userId: UUID;
   wordId: UUID;
+}
+
+export interface UserVocabularySearchResponse {
+  userVocabulary: UserVocabularyResponse;
+  word: WordResponse;
 }
 
 export type SavedVocabularyPageResponse = PageResponse<UserVocabularyResponse>;
