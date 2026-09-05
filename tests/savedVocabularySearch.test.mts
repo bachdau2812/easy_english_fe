@@ -89,3 +89,13 @@ test("saved search component exposes accessible listbox keyboard behavior", () =
   assert.match(componentSource, /event\.key === "Escape"/);
   assert.match(componentSource, /onSelect\(result\.word\)/);
 });
+
+test("saved search dismissal clears the active option reference", () => {
+  assert.match(
+    componentSource,
+    /const dismissDropdown = \(\) => \{\s*setIsOpen\(false\);\s*setActiveIndex\(-1\);\s*\};/
+  );
+  assert.match(componentSource, /useClickOutside\(rootRef, dismissDropdown\)/);
+  assert.match(componentSource, /if \(event\.key === "Escape"\) \{\s*dismissDropdown\(\)/);
+  assert.match(componentSource, /onSelect\(result\.word\);\s*dismissDropdown\(\)/);
+});

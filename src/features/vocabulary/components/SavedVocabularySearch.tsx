@@ -30,18 +30,23 @@ export const SavedVocabularySearch = ({ onSelect }: SavedVocabularySearchProps) 
       );
   const isLoading = search.isDebouncing || search.isFetching;
 
-  useClickOutside(rootRef, () => setIsOpen(false));
+  const dismissDropdown = () => {
+    setIsOpen(false);
+    setActiveIndex(-1);
+  };
+
+  useClickOutside(rootRef, dismissDropdown);
 
   useEffect(() => setActiveIndex(-1), [search.data, text]);
 
   const selectResult = (result: UserVocabularySearchResponse) => {
     onSelect(result.word);
-    setIsOpen(false);
+    dismissDropdown();
   };
 
   const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.key === "Escape") {
-      setIsOpen(false);
+      dismissDropdown();
       return;
     }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
