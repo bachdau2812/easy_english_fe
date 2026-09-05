@@ -47,7 +47,7 @@ jobs:
             -p "$SERVER_PORT" \
             "$SERVER_HOST" >> "$HOME/.ssh/known_hosts"
 
-      - name: Deploy backend
+      - name: Deploy frontend
         run: |
           ssh \
             -i ~/.ssh/id_ed25519 \
@@ -58,11 +58,11 @@ jobs:
           
             cd /data/bachdd/vocab-deploy
           
-            echo "Pulling backend image..."
-            docker compose pull backend
+            echo "Pulling frontend image..."
+            docker compose pull frontend
           
-            echo "Starting backend..."
-            docker compose --env-file .env.backend  up -d --force-recreate frontend
+            echo "Starting frontend..."
+            docker compose --env-file ../environment_variable/.env.backend  up -d --force-recreate frontend
           
             echo "Current containers:"
             docker compose ps
