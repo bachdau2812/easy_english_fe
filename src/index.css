@@ -6554,6 +6554,27 @@ input {
   width: 100%;
 }
 
+.listen-correct-popup__translation {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  width: 100%;
+}
+
+.listen-correct-popup__translation small {
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.listen-correct-popup__translation p {
+  background: #f8fafc;
+  color: #475569;
+  font-size: 1rem;
+}
+
 .listen-correct-popup button {
   background: #111827;
   border: 0;

@@ -41,6 +41,7 @@ export interface ListenAndTypeChallengeResponse {
   content?: string | null;
   jsonContent?: string | null;
   solution?: string | null;
+  translate?: string | null;
   timeStart?: number | null;
   timeEnd?: number | null;
   hints?: string | null;

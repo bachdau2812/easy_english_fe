@@ -13,6 +13,13 @@ const listeningDetailPageSource = readFileSync(
   "utf8"
 );
 
+const listeningTypesSource = readFileSync(
+  new URL("../src/features/listening/types.ts", import.meta.url),
+  "utf8"
+);
+
+const cssSource = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
+
 test("normalizes casing, repeated whitespace, and special characters at word boundaries", () => {
   assert.equal(normalizeDictationAnswer("  (Hello),   WORLD!  "), "hello world");
   assert.equal(normalizeDictationAnswer("[CAN'T!]"), "can't");
@@ -118,4 +125,32 @@ test("the lesson page permits only one active microphone session", () => {
     listeningDetailPageSource,
     /if \(speechRecognitionRef\.current === recognition\) \{\s*speechRecognitionRef\.current = null;\s*setIsListening\(false\);\s*\}/
   );
+});
+
+test("listen challenges expose an optional nullable translation", () => {
+  const challengeContract = listeningTypesSource.match(
+    /export interface ListenAndTypeChallengeResponse\s*\{[\s\S]*?\n\}/
+  )?.[0] ?? "";
+
+  assert.match(challengeContract, /translate\?: string \| null;/);
+});
+
+test("the Correct popup conditionally shows the trimmed Vietnamese meaning", () => {
+  assert.match(
+    listeningDetailPageSource,
+    /const currentTranslation = currentChallenge\?\.translate\?\.trim\(\) \?\? "";/
+  );
+  assert.match(
+    listeningDetailPageSource,
+    /\{currentTranslation \? \([\s\S]*?className="listen-correct-popup__translation"[\s\S]*?<small>Vietnamese meaning<\/small>[\s\S]*?<p>\{currentTranslation\}<\/p>[\s\S]*?\) : null\}/
+  );
+});
+
+test("the Vietnamese meaning has dedicated secondary styling", () => {
+  assert.match(
+    cssSource,
+    /\.listen-correct-popup__translation\s*\{[\s\S]*?width:\s*100%/
+  );
+  assert.match(cssSource, /\.listen-correct-popup__translation small\s*\{/);
+  assert.match(cssSource, /\.listen-correct-popup__translation p\s*\{/);
 });

@@ -290,6 +290,7 @@ export const ListeningDetailPage = () => {
   const transcriptChallengeId = transcriptChallenge?.id ?? `transcript-${transcriptIndex}`;
   const currentSolutionAlternatives = parseSolutionAlternatives(currentChallenge);
   const currentSolution = getChallengeSolution(currentChallenge);
+  const currentTranslation = currentChallenge?.translate?.trim() ?? "";
   const currentHints = safeJsonParse<string[]>(currentChallenge?.hints, []);
   const isCurrentDone =
     Boolean(currentChallenge?.isDone || (currentChallenge?.id && doneIds.has(currentChallenge.id))) &&
@@ -885,6 +886,12 @@ export const ListeningDetailPage = () => {
             </span>
             <h3>Correct</h3>
             <p>{correctPopupAnswer || currentSolution}</p>
+            {currentTranslation ? (
+              <div className="listen-correct-popup__translation">
+                <small>Vietnamese meaning</small>
+                <p>{currentTranslation}</p>
+              </div>
+            ) : null}
             <button onClick={closeCorrectPopup} type="button">
               Continue
             </button>
