@@ -13,8 +13,10 @@ import { useListeningExerciseDetail } from "../hooks/useListeningExerciseDetail"
 import {
   getDictationMask,
   getInitialChallengeIndex,
+  getNewFinalSpeechTranscript,
   normalizeDictationAnswer
 } from "../listenAndType";
+import type { SpeechRecognitionResultLike } from "../listenAndType";
 import { ListenAndTypeChallengeResponse, ListenAndTypeReturnState } from "../types";
 
 type ListenTab = "dictation" | "transcript";
@@ -30,7 +32,10 @@ type BrowserSpeechRecognition = {
   lang: string;
   onend: (() => void) | null;
   onerror: (() => void) | null;
-  onresult: ((event: { results: ArrayLike<{ 0: { transcript: string }; isFinal: boolean }> }) => void) | null;
+  onresult: ((event: {
+    resultIndex: number;
+    results: ArrayLike<SpeechRecognitionResultLike>;
+  }) => void) | null;
   start: () => void;
   stop: () => void;
 };
@@ -337,7 +342,9 @@ export const ListeningDetailPage = () => {
 
   useEffect(
     () => () => {
-      speechRecognitionRef.current?.stop();
+      const recognition = speechRecognitionRef.current;
+      speechRecognitionRef.current = null;
+      recognition?.stop();
       if (speechFillEffectTimeoutRef.current) {
         window.clearTimeout(speechFillEffectTimeoutRef.current);
       }
@@ -507,6 +514,10 @@ export const ListeningDetailPage = () => {
   };
 
   const startSpeechInput = () => {
+    if (speechRecognitionRef.current) {
+      return;
+    }
+
     const SpeechRecognition = getSpeechRecognitionConstructor();
 
     if (!SpeechRecognition) {
@@ -519,11 +530,7 @@ export const ListeningDetailPage = () => {
     recognition.interimResults = false;
     recognition.lang = lesson.data?.speechToTextLangCode ?? "en-US";
     recognition.onresult = (event) => {
-      const transcript = Array.from(event.results)
-        .map((result) => result[0]?.transcript)
-        .filter(Boolean)
-        .join(" ")
-        .trim();
+      const transcript = getNewFinalSpeechTranscript(event.results, event.resultIndex);
 
       if (transcript) {
         setAnswer((current) => `${current}${current.trim() ? " " : ""}${transcript}`.trim());
@@ -538,8 +545,14 @@ export const ListeningDetailPage = () => {
         }, 950);
       }
     };
-    recognition.onerror = () => setIsListening(false);
-    recognition.onend = () => setIsListening(false);
+    const finishSpeechInput = () => {
+      if (speechRecognitionRef.current === recognition) {
+        speechRecognitionRef.current = null;
+        setIsListening(false);
+      }
+    };
+    recognition.onerror = finishSpeechInput;
+    recognition.onend = finishSpeechInput;
     speechRecognitionRef.current = recognition;
     setIsListening(true);
     recognition.start();
@@ -717,6 +730,7 @@ export const ListeningDetailPage = () => {
                         <button
                           aria-label={isListening ? "Listening" : "Speak to fill"}
                           className={`listen-speech-button ${isListening ? "listen-speech-button--active" : ""}`}
+                          disabled={isListening}
                           onClick={startSpeechInput}
                           type="button"
                         >

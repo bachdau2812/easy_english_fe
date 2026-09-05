@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   getDictationMask,
   getInitialChallengeIndex,
+  getNewFinalSpeechTranscript,
   normalizeDictationAnswer
 } from "../src/features/listening/listenAndType.ts";
 
@@ -69,10 +70,52 @@ test("uses one star per non-space character including punctuation", () => {
   assert.equal(getDictationMask("a b"), "**");
 });
 
+test("speech input reads only newly finalized cumulative results", () => {
+  const results = [
+    { 0: { transcript: "hello" }, isFinal: true },
+    { 0: { transcript: "world" }, isFinal: true }
+  ];
+
+  assert.equal(getNewFinalSpeechTranscript(results, 1), "world");
+});
+
+test("speech input ignores interim text and preserves intentional repeated words", () => {
+  const results = [
+    { 0: { transcript: "temporary guess" }, isFinal: false },
+    { 0: { transcript: "very very good" }, isFinal: true }
+  ];
+
+  assert.equal(getNewFinalSpeechTranscript(results, 0), "very very good");
+});
+
 test("the lesson page wires resume, exact masks, completed navigation, and input focus", () => {
   assert.match(listeningDetailPageSource, /getInitialChallengeIndex\(/);
   assert.match(listeningDetailPageSource, /getDictationMask\(word\)/);
   assert.match(listeningDetailPageSource, /ref=\{dictationInputRef\}/);
   assert.match(listeningDetailPageSource, /dictationInputRef\.current\?\.focus\(\)/);
   assert.match(listeningDetailPageSource, />\s*Next\s*</);
+});
+
+test("the lesson page consumes only new final speech results", () => {
+  assert.match(listeningDetailPageSource, /resultIndex: number;/);
+  assert.match(
+    listeningDetailPageSource,
+    /getNewFinalSpeechTranscript\(event\.results, event\.resultIndex\)/
+  );
+  assert.doesNotMatch(
+    listeningDetailPageSource,
+    /Array\.from\(event\.results\)[\s\S]*?\.join\(" "\)/
+  );
+});
+
+test("the lesson page permits only one active microphone session", () => {
+  assert.match(
+    listeningDetailPageSource,
+    /if \(speechRecognitionRef\.current\) \{\s*return;\s*\}/
+  );
+  assert.match(listeningDetailPageSource, /disabled=\{isListening\}/);
+  assert.match(
+    listeningDetailPageSource,
+    /if \(speechRecognitionRef\.current === recognition\) \{\s*speechRecognitionRef\.current = null;\s*setIsListening\(false\);\s*\}/
+  );
 });

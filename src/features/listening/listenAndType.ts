@@ -3,6 +3,11 @@ export interface ChallengeCompletionState {
   isDone?: boolean | null;
 }
 
+export interface SpeechRecognitionResultLike {
+  0?: { transcript?: string };
+  isFinal: boolean;
+}
+
 const normalizeDictationWord = (word: string) =>
   word.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
 
@@ -32,3 +37,15 @@ export const getInitialChallengeIndex = (
 
 export const getDictationMask = (word: string) =>
   "*".repeat(Array.from(word).filter((character) => !/\s/u.test(character)).length);
+
+export const getNewFinalSpeechTranscript = (
+  results: ArrayLike<SpeechRecognitionResultLike>,
+  resultIndex: number
+) =>
+  Array.from(results)
+    .slice(Math.max(resultIndex, 0))
+    .filter((result) => result.isFinal)
+    .map((result) => result[0]?.transcript?.trim())
+    .filter(Boolean)
+    .join(" ")
+    .trim();
