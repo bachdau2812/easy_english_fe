@@ -18,6 +18,16 @@ const vocabularyApiSource = readFileSync(
   "utf8"
 );
 
+const hookSource = readFileSync(
+  new URL("../src/features/vocabulary/hooks/useSavedVocabularySearch.ts", import.meta.url),
+  "utf8"
+);
+
+const componentSource = readFileSync(
+  new URL("../src/features/vocabulary/components/SavedVocabularySearch.tsx", import.meta.url),
+  "utf8"
+);
+
 test("saved vocabulary search constants and keyboard wrapping stay fixed", () => {
   assert.equal(SAVED_VOCABULARY_SEARCH_MIN_LENGTH, 2);
   assert.equal(SAVED_VOCABULARY_SEARCH_DEBOUNCE_MS, 300);
@@ -58,4 +68,24 @@ test("saved vocabulary search query key includes text, autocomplete mode, page, 
     queryKeys.savedVocabularySearch(" saved ", true, 0, 20),
     ["vocabulary", "saved-search", " saved ", true, 0, 20]
   );
+});
+
+test("saved search hook debounces normalized text and enables at two characters", () => {
+  assert.match(hookSource, /useDebounce\(normalizedText, SAVED_VOCABULARY_SEARCH_DEBOUNCE_MS\)/);
+  assert.match(hookSource, /debouncedText\.length >= SAVED_VOCABULARY_SEARCH_MIN_LENGTH/);
+  assert.match(hookSource, /isAutocomplete:\s*true/);
+  assert.match(hookSource, /page:\s*0/);
+  assert.match(hookSource, /limit:\s*20/);
+  assert.doesNotMatch(hookSource, /userId:/);
+});
+
+test("saved search component exposes accessible listbox keyboard behavior", () => {
+  assert.match(componentSource, /role="combobox"/);
+  assert.match(componentSource, /role="listbox"/);
+  assert.match(componentSource, /role="option"/);
+  assert.match(componentSource, /ArrowDown/);
+  assert.match(componentSource, /ArrowUp/);
+  assert.match(componentSource, /event\.key === "Enter"/);
+  assert.match(componentSource, /event\.key === "Escape"/);
+  assert.match(componentSource, /onSelect\(result\.word\)/);
 });
