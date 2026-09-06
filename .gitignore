@@ -6,3 +6,7 @@ vite.config.d.ts
 .env
 .env.local
 docs/
+.superpowers/
+/backend_context.md
+/FE_rule.md
+/ielts_reading_quiz_ui_prompt.md

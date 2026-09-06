@@ -288,6 +288,7 @@ export const ListeningDetailPage = () => {
   const currentChallengeId = currentChallenge?.id ?? `challenge-${currentIndex}`;
   const transcriptChallenge = challenges[transcriptIndex] ?? null;
   const transcriptChallengeId = transcriptChallenge?.id ?? `transcript-${transcriptIndex}`;
+  const transcriptTranslation = transcriptChallenge?.translate?.trim() ?? "";
   const currentSolutionAlternatives = parseSolutionAlternatives(currentChallenge);
   const currentSolution = getChallengeSolution(currentChallenge);
   const currentTranslation = currentChallenge?.translate?.trim() ?? "";
@@ -807,7 +808,10 @@ export const ListeningDetailPage = () => {
                       src={lesson.data.audioUrl ?? undefined}
                     />
                     <div className="listen-transcript-current">
-                      {transcriptChallenge?.content ?? "Select a sentence"}
+                      <p>{transcriptChallenge?.content ?? "Select a sentence"}</p>
+                      {transcriptTranslation ? (
+                        <p className="listen-transcript-current__translation">{transcriptTranslation}</p>
+                      ) : null}
                     </div>
                     <div className="listen-transcript-nav">
                       <button onClick={() => moveToTranscript(transcriptIndex - 1)} type="button">

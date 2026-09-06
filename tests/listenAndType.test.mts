@@ -146,6 +146,21 @@ test("the Correct popup conditionally shows the trimmed Vietnamese meaning", () 
   );
 });
 
+test("the transcript card shows the current Vietnamese translation below the English sentence", () => {
+  assert.match(
+    listeningDetailPageSource,
+    /const transcriptTranslation = transcriptChallenge\?\.translate\?\.trim\(\) \?\? "";/
+  );
+  assert.match(
+    listeningDetailPageSource,
+    /className="listen-transcript-current"[\s\S]*?<p>\{transcriptChallenge\?\.content[\s\S]*?\{transcriptTranslation \? \([\s\S]*?className="listen-transcript-current__translation"[\s\S]*?\{transcriptTranslation\}[\s\S]*?\) : null\}/
+  );
+  assert.match(
+    cssSource,
+    /\.listen-transcript-current__translation\s*\{[\s\S]*?color:\s*#64748b;[\s\S]*?font-size:/
+  );
+});
+
 test("the Vietnamese meaning has dedicated secondary styling", () => {
   assert.match(
     cssSource,

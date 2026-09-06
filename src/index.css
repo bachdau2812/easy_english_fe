@@ -6420,6 +6420,21 @@ input {
   text-align: center;
 }
 
+.listen-transcript-current p {
+  margin: 0;
+}
+
+.listen-transcript-current__translation {
+  color: #64748b;
+  font-size: clamp(0.95rem, 0.9rem + 0.25vw, 1.12rem);
+  font-weight: 500;
+  line-height: 1.55;
+}
+
+.listen-transcript-current p + .listen-transcript-current__translation {
+  margin-top: 10px;
+}
+
 .listen-transcript-nav {
   align-items: center;
   background: #ffffff;
