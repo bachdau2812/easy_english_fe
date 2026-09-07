@@ -9,6 +9,11 @@ import { isIeltsWritingReview } from "../src/features/writing/writingReview.ts";
 const server = await createServer({ server: { middlewareMode: true, hmr: false }, appType: "custom" });
 after(() => server.close());
 const { WritingReview, WritingReviewResult } = await server.ssrLoadModule("/src/features/writing/components/WritingReview.tsx");
+const writingPageSource = readFileSync(
+  new URL("../src/features/writing/pages/WritingPage.tsx", import.meta.url),
+  "utf8",
+);
+const appCssSource = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
 
 interface Schema {
   type: string;
@@ -141,4 +146,15 @@ test("the result boundary keeps the task-specific layout for current and enriche
     assert.match(html, index === 0 ? /Task Achievement/ : /Task Response/);
     assert.doesNotMatch(html, /Review chưa đầy đủ/);
   }
+});
+
+test("pending writing review shows a centered AI feedback disclaimer below the wait message", () => {
+  assert.match(
+    writingPageSource,
+    /AI feedback can take a little while\. Please keep this window open\.<\/p>\s*<p>AI feedback is for reference only\.<\/p>/,
+  );
+  assert.match(
+    appCssSource,
+    /\.writing-review-popup__loading\s*\{[^}]*justify-items:\s*center;[^}]*text-align:\s*center;/s,
+  );
 });

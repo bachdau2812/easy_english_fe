@@ -1001,6 +1001,7 @@ export const WritingPracticePage = () => {
                       <i />
                       <strong>Reviewing your essay...</strong>
                       <p>AI feedback can take a little while. Please keep this window open.</p>
+                      <p>AI feedback is for reference only.</p>
                     </div>
                   ) : null}
                   {reviewErrorMessage || reviewWriting.isError ? (
