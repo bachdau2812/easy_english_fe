@@ -6,6 +6,7 @@ import {
   IeltsWritingProblemSummaryResponse,
   IeltsWritingReference,
   IeltsWritingReviewRequest,
+  IeltsWritingReview,
   WritingTaskType
 } from "../types";
 
@@ -30,7 +31,7 @@ export const writingApi = {
     });
   },
   review(payload: IeltsWritingReviewRequest) {
-    return apiClient.post<string>("/learning-resources/ielts-writing/reviews", payload);
+    return apiClient.post<string | IeltsWritingReview>("/learning-resources/ielts-writing/reviews", payload);
   },
   getAttemptHistory(params: { exerciseId: string; userId: string }) {
     return apiClient.get<IeltsWritingAttemptHistoryResponse[] | IeltsWritingAttemptHistoryPageResponse>(

@@ -1,0 +1,44 @@
+.writing-ai-review {
+  color: #243044;
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+  font-size: 15px;
+  line-height: 1.65;
+  overflow-wrap: anywhere;
+}
+.writing-ai-review h3, .writing-ai-review h4, .writing-ai-review p,
+.writing-ai-review ul, .writing-ai-review ol, .writing-ai-review dl { margin: 0; }
+.writing-ai-review p, .writing-ai-review li, .writing-ai-review dd, .writing-ai-review blockquote { white-space: pre-wrap; }
+.writing-ai-review .writing-ai-review__section > h3,
+.writing-ai-review .writing-ai-review__intro > h3 { color: #172033; font-size: 18px; font-weight: 700; margin: 0; }
+.writing-ai-review h4 { color: #344054; font-size: 14px; font-weight: 650; }
+.writing-ai-review ul, .writing-ai-review ol { padding-left: 22px; }
+.writing-ai-review li + li { margin-top: 6px; }
+.writing-ai-review__intro { background: #eff6ff; border: 1px solid #dbeafe; border-radius: 12px; display: grid; gap: 10px; padding: 18px; }
+.writing-ai-review__task { color: #1d4ed8; font-size: 13px; font-weight: 650; }
+.writing-ai-review__section { display: grid; gap: 14px; min-width: 0; }
+.writing-ai-review__section + .writing-ai-review__section { border-top: 1px solid #e4e9f0; padding-top: 20px; }
+.writing-ai-review__criteria { display: grid; gap: 10px; }
+.writing-ai-review__criterion { background: #fff; border: 1px solid #e4e9f0; border-radius: 10px; min-width: 0; }
+.writing-ai-review__criterion summary { cursor: pointer; padding: 14px 16px; }
+.writing-ai-review__criterion summary::marker { color: #2563eb; }
+.writing-ai-review__criterion summary > span { font-weight: 600; }
+.writing-ai-review__criterion summary > strong { background: #eff6ff; border-radius: 6px; color: #1d4ed8; display: inline-block; font-size: 14px; margin-left: 10px; padding: 2px 8px; white-space: nowrap; }
+.writing-ai-review__criterion summary:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; border-radius: 10px; }
+.writing-ai-review__criterion-body { border-top: 1px solid #e4e9f0; display: grid; gap: 16px; padding: 16px; }
+.writing-ai-review__columns { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); }
+.writing-ai-review__field { display: grid; gap: 6px; min-width: 0; }
+.writing-ai-review .writing-ai-review__muted { color: #667085; font-size: 14px; }
+.writing-ai-review__status { background: #f1f5f9; border-radius: 8px; padding: 10px 12px; }
+.writing-ai-review__example { background: #fff; border: 1px solid #e4e9f0; border-radius: 10px; display: grid; gap: 10px; min-width: 0; padding: 14px; }
+.writing-ai-review__example-heading { align-items: center; display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; }
+.writing-ai-review__tag { background: #f1f5f9; border-radius: 6px; color: #475467; font-size: 12px; font-weight: 600; justify-self: start; padding: 3px 8px; }
+.writing-ai-review__tag--major { background: #fff1f2; color: #9f1239; }
+.writing-ai-review__correction { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
+.writing-ai-review__correction > div { background: #f8fafc; border-radius: 8px; min-width: 0; padding: 10px 12px; }
+.writing-ai-review__correction > div:last-child { background: #eff6ff; }
+.writing-ai-review__correction dt { color: #667085; font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+.writing-ai-review__correction dd { margin: 0; }
+.writing-ai-review blockquote { border-left: 3px solid #93c5fd; margin: 0; padding: 4px 12px; }
+.writing-ai-review__priorities { background: #f8fafc; border-radius: 10px; padding: 16px; }

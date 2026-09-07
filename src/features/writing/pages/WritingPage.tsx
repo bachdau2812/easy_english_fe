@@ -9,6 +9,7 @@ import { useAuth } from "../../auth/hooks/useAuth";
 import { HomeIcon } from "../../home/components/HomeIcon";
 import { LearningRouteChrome } from "../../home/components/LearningRouteChrome";
 import { writingApi } from "../api/writingApi";
+import { WritingReviewResult } from "../components/WritingReview";
 import {
   IeltsWritingAttemptHistoryResponse,
   IeltsWritingAttemptHistoryPageResponse,
@@ -381,6 +382,9 @@ const renderWritingReviewValue = (value: unknown): ReactNode => {
   }
 
   if (isReviewRecord(value)) {
+    if ("criteria" in value || "task1Analysis" in value || "task2Analysis" in value) {
+      return <WritingReviewResult value={value} />;
+    }
     const ieltsReview = renderIeltsWritingReview(value);
 
     if (ieltsReview) {
@@ -412,7 +416,7 @@ const getAttemptAnswer = (attempt?: IeltsWritingAttemptHistoryResponse | null) =
   attempt?.userAnswer?.trim() || attempt?.user_answer?.trim() || "No answer was returned for this attempt.";
 
 const getAttemptReview = (attempt?: IeltsWritingAttemptHistoryResponse | null) =>
-  attempt?.review?.trim() || "";
+  typeof attempt?.review === "string" ? attempt.review.trim() : attempt?.review ?? null;
 
 const formatAttemptDate = (value?: string | null) => {
   if (!value) {
