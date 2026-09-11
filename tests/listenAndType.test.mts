@@ -7,6 +7,7 @@ import {
   getNewFinalSpeechTranscript,
   normalizeDictationAnswer
 } from "../src/features/listening/listenAndType.ts";
+import * as dictation from "../src/features/listening/listenAndType.ts";
 
 const listeningDetailPageSource = readFileSync(
   new URL("../src/features/listening/pages/ListeningDetailPage.tsx", import.meta.url),
@@ -71,10 +72,43 @@ test("falls back to the first challenge when every challenge is complete", () =>
   assert.equal(getInitialChallengeIndex([], []), 0);
 });
 
-test("uses one star per non-space character including punctuation", () => {
+test("masks whole words including internal punctuation while preserving spaces and boundary punctuation", () => {
   assert.equal(getDictationMask("an"), "**");
-  assert.equal(getDictationMask("well-known,"), "***********");
-  assert.equal(getDictationMask("a b"), "**");
+  assert.equal(getDictationMask("well-known,"), "**********,");
+  assert.equal(getDictationMask("it's"), "****");
+  assert.equal(getDictationMask("it’s?"), "****?");
+  assert.equal(getDictationMask("\"it's\""), "\"****\"");
+  assert.equal(getDictationMask("a b"), "* *");
+  assert.equal(getDictationMask("are you?"), "*** ***?");
+  assert.equal(getDictationMask("a\u200Bb"), "**");
+});
+
+test("accepts optional attached or separated question marks on either side", () => {
+  assert.equal(typeof dictation.getDictationMatchResult, "function");
+  for (const solution of [ [["Are"], ["you"], ["ready?"]], [["Are"], ["you"], ["ready"], ["?"]] ]) {
+    for (const answer of ["Are you ready", "Are you ready?", "Are you ready ?"]) {
+      assert.equal(dictation.getDictationMatchResult(answer, solution).isCorrect, true, answer);
+    }
+    assert.equal(dictation.getDictationMatchResult("Are you read?", solution).isCorrect, false);
+    assert.equal(dictation.getDictationMatchResult("Are you ready now?", solution).isCorrect, false);
+  }
+});
+
+test("keeps contraction alternatives working next to punctuation", () => {
+  assert.equal(typeof dictation.getDictationMatchResult, "function");
+  assert.equal(dictation.getDictationMatchResult("We are ready ?", [["We're"], ["ready?"]]).isCorrect, true);
+  assert.equal(dictation.getDictationMatchResult("They cannot", [["They"], ["can't?"]]).isCorrect, true);
+  assert.equal(dictation.getDictationMatchResult(" ? ", [["ready?"]]).isCorrect, false);
+});
+
+test("incorrect hints preserve spaces within phrase alternatives and do not mask question marks", () => {
+  assert.equal(typeof dictation.getHintTokens, "function");
+  assert.deepEqual(dictation.getHintTokens("wrong", [["Are"], ["you"], ["at home"], ["?"]]), [
+    { isCorrect: false, text: "Are" },
+    { isCorrect: false, text: "you" },
+    { isCorrect: false, text: "** ****" },
+    { isCorrect: false, text: "?" }
+  ]);
 });
 
 test("speech input reads only newly finalized cumulative results", () => {
@@ -97,7 +131,7 @@ test("speech input ignores interim text and preserves intentional repeated words
 
 test("the lesson page wires resume, exact masks, completed navigation, and input focus", () => {
   assert.match(listeningDetailPageSource, /getInitialChallengeIndex\(/);
-  assert.match(listeningDetailPageSource, /getDictationMask\(word\)/);
+  assert.match(listeningDetailPageSource, /getHintTokens\(answer, currentSolutionAlternatives\)/);
   assert.match(listeningDetailPageSource, /ref=\{dictationInputRef\}/);
   assert.match(listeningDetailPageSource, /dictationInputRef\.current\?\.focus\(\)/);
   assert.match(listeningDetailPageSource, />\s*Next\s*</);

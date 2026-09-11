@@ -11,20 +11,15 @@ import { HomeIcon } from "../../home/components/HomeIcon";
 import { reviewApi } from "../../review/api/reviewApi";
 import { useListeningExerciseDetail } from "../hooks/useListeningExerciseDetail";
 import {
-  getDictationMask,
+  getDictationMatchResult,
+  getHintTokens,
   getInitialChallengeIndex,
-  getNewFinalSpeechTranscript,
-  normalizeDictationAnswer
+  getNewFinalSpeechTranscript
 } from "../listenAndType";
-import type { SpeechRecognitionResultLike } from "../listenAndType";
+import type { DictationHintToken, SpeechRecognitionResultLike } from "../listenAndType";
 import { ListenAndTypeChallengeResponse, ListenAndTypeReturnState } from "../types";
 
 type ListenTab = "dictation" | "transcript";
-
-interface DictationHintToken {
-  isCorrect: boolean;
-  text: string;
-}
 
 type BrowserSpeechRecognition = {
   continuous: boolean;
@@ -78,133 +73,6 @@ const getCanonicalSolutionWords = (challenge?: ListenAndTypeChallengeResponse | 
 
 const getChallengeSolution = (challenge?: ListenAndTypeChallengeResponse | null) =>
   getCanonicalSolutionWords(challenge).join(" ").trim();
-
-const getContractionExpandedPhrases = (value: string) => {
-  const normalizedValue = value.replace(/[’‘]/g, "'").trim();
-  const lowerValue = normalizedValue.toLowerCase();
-  const specialContractions: Record<string, string[]> = {
-    "aren't": ["are not"],
-    "can't": ["can not", "cannot"],
-    "couldn't": ["could not"],
-    "didn't": ["did not"],
-    "doesn't": ["does not"],
-    "don't": ["do not"],
-    "hadn't": ["had not"],
-    "hasn't": ["has not"],
-    "haven't": ["have not"],
-    "isn't": ["is not"],
-    "mightn't": ["might not"],
-    "mustn't": ["must not"],
-    "needn't": ["need not"],
-    "shan't": ["shall not"],
-    "shouldn't": ["should not"],
-    "wasn't": ["was not"],
-    "weren't": ["were not"],
-    "won't": ["will not"],
-    "wouldn't": ["would not"]
-  };
-
-  if (specialContractions[lowerValue]) {
-    return specialContractions[lowerValue];
-  }
-
-  const contractionMatch = normalizedValue.match(/^(.+)'(re|m|ll|ve|s|d)$/i);
-
-  if (!contractionMatch) {
-    return [];
-  }
-
-  const base = contractionMatch[1];
-  const suffix = contractionMatch[2].toLowerCase();
-  const expansionsBySuffix: Record<string, string[]> = {
-    d: ["would", "had"],
-    ll: ["will"],
-    m: ["am"],
-    re: ["are"],
-    s: ["is", "has"],
-    ve: ["have"]
-  };
-
-  return (expansionsBySuffix[suffix] ?? []).map((expansion) => `${base} ${expansion}`);
-};
-
-const getAlternativeMatchCandidates = (alternative: string) => {
-  const candidates = [alternative, ...getContractionExpandedPhrases(alternative)];
-  const uniqueCandidates = new Map<string, string>();
-
-  candidates.forEach((candidate) => {
-    const normalizedCandidate = normalizeDictationAnswer(candidate);
-    if (normalizedCandidate && !uniqueCandidates.has(normalizedCandidate)) {
-      uniqueCandidates.set(normalizedCandidate, candidate);
-    }
-  });
-
-  return [...uniqueCandidates.values()];
-};
-
-const getMatchedAlternativeWordCount = (
-  answerWords: string[],
-  startIndex: number,
-  alternatives: string[]
-) => {
-  for (const alternative of alternatives) {
-    for (const candidate of getAlternativeMatchCandidates(alternative)) {
-      const candidateWords = splitDictationWords(candidate);
-      const wordCount = Math.max(candidateWords.length, 1);
-      const answerSegment = answerWords.slice(startIndex, startIndex + wordCount).join(" ");
-      const normalizedAnswerSegment = normalizeDictationAnswer(answerSegment);
-      const normalizedCandidate = normalizeDictationAnswer(candidate);
-
-      if (normalizedAnswerSegment && normalizedAnswerSegment === normalizedCandidate) {
-        return wordCount;
-      }
-    }
-  }
-
-  return null;
-};
-
-const getDictationMatchResult = (answer: string, solutionAlternatives: string[][]) => {
-  const answerWords = splitDictationWords(answer);
-  const canonicalWords = solutionAlternatives.map((entry) => entry[0]);
-  let answerWordIndex = 0;
-  let correctPrefix = 0;
-
-  for (const alternatives of solutionAlternatives) {
-    const matchedWordCount = getMatchedAlternativeWordCount(answerWords, answerWordIndex, alternatives);
-
-    if (!matchedWordCount) {
-      break;
-    }
-
-    answerWordIndex += matchedWordCount;
-    correctPrefix += 1;
-  }
-
-  const canonicalizedAnswer = [
-    ...canonicalWords.slice(0, correctPrefix),
-    ...answerWords.slice(answerWordIndex)
-  ].join(" ").trim();
-
-  return {
-    canonicalAnswer: canonicalWords.join(" ").trim(),
-    canonicalizedAnswer,
-    correctPrefix,
-    isCorrect: correctPrefix === solutionAlternatives.length && answerWordIndex === answerWords.length
-  };
-};
-
-const getHintTokens = (answer: string, solutionAlternatives: string[][]): DictationHintToken[] => {
-  const solutionWords = solutionAlternatives.map((entry) => entry[0]);
-  const { correctPrefix } = getDictationMatchResult(answer, solutionAlternatives);
-
-  const visibleCount = correctPrefix < 2 ? 2 : Math.min(correctPrefix + 1, solutionWords.length);
-  return solutionWords
-    .map((word, index) => ({
-      isCorrect: index < correctPrefix,
-      text: index < visibleCount ? word : getDictationMask(word)
-    }));
-};
 
 const getSpeechRecognitionConstructor = () => {
   const speechWindow = window as typeof window & {
@@ -473,19 +341,13 @@ export const ListeningDetailPage = () => {
     }
 
     const matchResult = getDictationMatchResult(answer, currentSolutionAlternatives);
-    const nextAnswer = matchResult.canonicalizedAnswer || answer;
-
-    if (nextAnswer !== answer) {
-      setAnswer(nextAnswer);
-    }
-
     if (!matchResult.isCorrect) {
-      setIncorrectHint(getHintTokens(nextAnswer, currentSolutionAlternatives));
+      setIncorrectHint(getHintTokens(answer, currentSolutionAlternatives));
       return;
     }
 
     setAnswer(matchResult.canonicalAnswer || currentSolution);
-    setCorrectPopupAnswer(matchResult.canonicalAnswer || currentSolution || nextAnswer);
+    setCorrectPopupAnswer(matchResult.canonicalAnswer || currentSolution || answer);
     correctPopupOpenedAtRef.current = performance.now();
     setIsCorrectPopupOpen(true);
 
@@ -496,7 +358,7 @@ export const ListeningDetailPage = () => {
         next.delete(currentChallenge.id as string);
         return next;
       });
-      submitAttempt.mutate({ challenge: currentChallenge, userAnswer: matchResult.canonicalAnswer || nextAnswer });
+      submitAttempt.mutate({ challenge: currentChallenge, userAnswer: matchResult.canonicalAnswer || answer });
     }
   };
 
