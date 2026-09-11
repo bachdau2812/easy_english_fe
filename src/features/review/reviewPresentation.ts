@@ -8,7 +8,7 @@ export interface ReviewMeaningPresentation {
 
 export interface ReviewSentenceSegment {
   text: string;
-  type: "highlight" | "text";
+  type: "highlight" | "text" | "blank";
 }
 
 export interface ReviewInlineFocus {
@@ -80,8 +80,9 @@ const completeReviewSentence = (sentence: string, answer?: string | null) => {
 
   if (sentence.includes("_")) {
     let answerIndex = 0;
+    const answerCharacters = [...cleanAnswer.replace(/\s/g, "")];
 
-    return sentence.replace(/_/g, () => cleanAnswer[answerIndex++] ?? "");
+    return sentence.replace(/_/g, () => answerCharacters[answerIndex++] ?? "");
   }
 
   return sentence.replace(REVIEW_NAMED_BLANK_PATTERN, cleanAnswer);
@@ -172,7 +173,75 @@ export const isReviewSentenceExercise = (exerciseType?: ExerciseType | null) =>
   exerciseType === "VOCAB_SENTENCE_TO_MEANING" ||
   exerciseType === "VOCAB_SENTENCE_BLANK_TO_SOUND";
 
+const getReviewTargetContext = (question: VocabReviewQuizResponse) => {
+  const sentence = question.example?.sentence;
+  const spans = question.targetSpans;
+
+  if (!sentence || !spans?.length) {
+    return null;
+  }
+
+  let previousEnd = 0;
+  for (const span of spans) {
+    if (
+      !Number.isInteger(span.start) || !Number.isInteger(span.end) ||
+      span.start < previousEnd || span.end <= span.start || span.end > sentence.length ||
+      sentence.slice(span.start, span.end) !== span.text
+    ) {
+      return null;
+    }
+    previousEnd = span.end;
+  }
+
+  return { sentence, spans };
+};
+
+export const getReviewQuestionSentenceSegments = (
+  question: VocabReviewQuizResponse
+): ReviewSentenceSegment[] => {
+  const isBlankChoice = question.exerciseType === "VOCAB_CHOOSE_WORD_IN_SENTENCE_BLANK" ||
+    question.exerciseType === "VOCAB_SENTENCE_BLANK_TO_SOUND";
+  const isMeaningChoice = question.exerciseType === "VOCAB_SENTENCE_TO_MEANING";
+  const context = getReviewTargetContext(question);
+
+  if (context && (isBlankChoice || isMeaningChoice)) {
+    const segments: ReviewSentenceSegment[] = [];
+    let previousEnd = 0;
+    for (const span of context.spans) {
+      if (span.start > previousEnd) {
+        segments.push({ text: context.sentence.slice(previousEnd, span.start), type: "text" });
+      }
+      segments.push(isBlankChoice
+        ? { text: "", type: "blank" }
+        : { text: context.sentence.slice(span.start, span.end), type: "highlight" });
+      previousEnd = span.end;
+    }
+    if (previousEnd < context.sentence.length) {
+      segments.push({ text: context.sentence.slice(previousEnd), type: "text" });
+    }
+    return segments;
+  }
+
+  // Legacy responses already contain masking/highlighting. Never show the
+  // unmasked example as a fallback for a missing blank-choice prompt.
+  const segments = parseReviewSentenceMarkup(question.sentence ?? (isBlankChoice
+    ? "Choose the missing word."
+    : isMeaningChoice ? question.example?.sentence : question.maskedWord));
+  return isBlankChoice ? segments.flatMap((segment) =>
+    segment.text.split(/(_+|\[\s*blank\s*\]|\(\s*blank\s*\))/gi)
+      .filter((part) => part.length > 0)
+      .map((part): ReviewSentenceSegment => /^(_+|\[\s*blank\s*\]|\(\s*blank\s*\))$/i.test(part)
+        ? { text: "", type: "blank" }
+        : { text: part, type: segment.type })
+  ) : segments;
+};
+
 export const getReviewResultSentence = (question: VocabReviewQuizResponse) => {
+  const context = getReviewTargetContext(question);
+  if (context && isReviewSentenceExercise(question.exerciseType)) {
+    return context.sentence.trim();
+  }
+
   const sentence = question.sentence?.trim();
 
   if (!sentence) {
@@ -206,7 +275,7 @@ export const getReviewResultExamplePresentation = (
     ? questionSentence
     : exampleSentence ?? questionSentence;
   const translation = isCompletedSentence
-    ? getFirstText(question.trans)
+    ? getFirstText(question.trans, getReviewTargetContext(question) ? question.example?.trans : null)
     : exampleSentence
       ? getFirstText(question.example?.trans)
       : getFirstText(question.trans);

@@ -12,6 +12,156 @@ import {
   shouldIgnoreReviewResultEnter,
   splitReviewInlineFocus
 } from "../src/features/review/reviewPresentation.ts";
+import * as reviewPresentation from "../src/features/review/reviewPresentation.ts";
+
+const separatedPhraseQuestion = {
+  word: "wrap up",
+  example: { sentence: "Please wrap it up.", trans: "Complete it, please." },
+  sentence: "Please ____ it __.",
+  maskedWord: "____ __",
+  missIndex: 7,
+  targetSpans: [
+    { start: 7, end: 11, text: "wrap" },
+    { start: 15, end: 17, text: "up" }
+  ]
+};
+
+test("restores separated sound-choice targets from the selected original example", () => {
+  assert.equal(getReviewResultSentence({
+    ...separatedPhraseQuestion,
+    exerciseType: "VOCAB_SENTENCE_BLANK_TO_SOUND",
+    correctAnswer: "2",
+    metadata: { 1: "wrong.mp3", 2: "wrap-up.mp3" }
+  }), "Please wrap it up.");
+});
+
+test("preserves the actual inflected form in the completed sentence", () => {
+  assert.equal(getReviewResultSentence({
+    exerciseType: "VOCAB_SENTENCE_BLANK_TO_SOUND",
+    word: "wrap up",
+    correctAnswer: "2",
+    sentence: "She _______ it __.",
+    example: { sentence: "She wrapped it up." },
+    targetSpans: [
+      { start: 4, end: 11, text: "wrapped" },
+      { start: 15, end: 17, text: "up" }
+    ]
+  }), "She wrapped it up.");
+});
+
+test("legacy phrase completion does not consume answer spaces as missing letters", () => {
+  assert.equal(getReviewResultSentence({
+    exerciseType: "VOCAB_CHOOSE_WORD_IN_SENTENCE_BLANK",
+    correctAnswer: "consists of",
+    sentence: "It ________ __ water."
+  }), "It consists of water.");
+});
+
+test("selected example translation is available for a completed span-based question", () => {
+  const result = getReviewResultExamplePresentation({
+    ...separatedPhraseQuestion,
+    exerciseType: "VOCAB_FILL_WORD_IN_SENTENCE_BLANK",
+    sentence: "Please wr_p it u_.",
+    maskedWord: "wr_p u_",
+    metadata: { 2: "a", 6: "p" },
+    correctAnswer: "wrap up"
+  });
+  assert.equal(result.sentence, "Please wrap it up.");
+  assert.equal(result.translation, "Complete it, please.");
+  assert.equal(result.extraSentence, null);
+});
+
+test("span rendering masks each separated target and keeps intervening text", () => {
+  assert.equal(typeof reviewPresentation.getReviewQuestionSentenceSegments, "function");
+  assert.deepEqual(reviewPresentation.getReviewQuestionSentenceSegments({
+    ...separatedPhraseQuestion,
+    exerciseType: "VOCAB_SENTENCE_BLANK_TO_SOUND"
+  }), [
+    { text: "Please ", type: "text" },
+    { text: "", type: "blank" },
+    { text: " it ", type: "text" },
+    { text: "", type: "blank" },
+    { text: ".", type: "text" }
+  ]);
+});
+
+test("meaning spans slice the original sentence before trimming or markup processing", () => {
+  assert.equal(typeof reviewPresentation.getReviewQuestionSentenceSegments, "function");
+  assert.deepEqual(reviewPresentation.getReviewQuestionSentenceSegments({
+    exerciseType: "VOCAB_SENTENCE_TO_MEANING",
+    example: { sentence: "  It consists of water." },
+    sentence: "  It <u>consists of</u> water.",
+    targetSpans: [{ start: 5, end: 16, text: "consists of" }],
+    correctAnswer: "3"
+  }), [
+    { text: "  It ", type: "text" },
+    { text: "consists of", type: "highlight" },
+    { text: " water.", type: "text" }
+  ]);
+});
+
+test("invalid or absent spans fall back to the masked backend sentence", () => {
+  assert.equal(typeof reviewPresentation.getReviewQuestionSentenceSegments, "function");
+  for (const targetSpans of [undefined, [], [{ start: 7, end: 99, text: "wrap" }]]) {
+    assert.deepEqual(reviewPresentation.getReviewQuestionSentenceSegments({
+      ...separatedPhraseQuestion,
+      exerciseType: "VOCAB_CHOOSE_WORD_IN_SENTENCE_BLANK",
+      targetSpans
+    }), [
+      { text: "Please ", type: "text" },
+      { text: "", type: "blank" },
+      { text: " it ", type: "text" },
+      { text: "", type: "blank" },
+      { text: ".", type: "text" }
+    ]);
+  }
+});
+
+test("a phrase span becomes one long blank and uses JavaScript UTF-16 offsets", () => {
+  assert.deepEqual(reviewPresentation.getReviewQuestionSentenceSegments({
+    exerciseType: "VOCAB_CHOOSE_WORD_IN_SENTENCE_BLANK",
+    example: { sentence: "📦 It consists of water." },
+    sentence: "📦 It ________ __ water.",
+    targetSpans: [{ start: 6, end: 17, text: "consists of" }]
+  }), [
+    { text: "📦 It ", type: "text" },
+    { text: "", type: "blank" },
+    { text: " water.", type: "text" }
+  ]);
+});
+
+test("separated meaning targets highlight only the actual target words", () => {
+  assert.deepEqual(reviewPresentation.getReviewQuestionSentenceSegments({
+    ...separatedPhraseQuestion,
+    exerciseType: "VOCAB_SENTENCE_TO_MEANING",
+    sentence: "Please <u>wrap</u> it <u>up</u>.",
+    maskedWord: "wrap up",
+    correctAnswer: "3"
+  }), [
+    { text: "Please ", type: "text" },
+    { text: "wrap", type: "highlight" },
+    { text: " it ", type: "text" },
+    { text: "up", type: "highlight" },
+    { text: ".", type: "text" }
+  ]);
+});
+
+test("a missing masked prompt never falls back to exposing the original example", () => {
+  const segments = reviewPresentation.getReviewQuestionSentenceSegments({
+    exerciseType: "VOCAB_SENTENCE_BLANK_TO_SOUND",
+    example: { sentence: "Please wrap it up." }
+  });
+  assert.equal(segments.map((segment) => segment.text).join(""), "Choose the missing word.");
+});
+
+test("fill prompts retain backend character hints and intervening words", () => {
+  assert.deepEqual(reviewPresentation.getReviewQuestionSentenceSegments({
+    ...separatedPhraseQuestion,
+    exerciseType: "VOCAB_FILL_WORD_IN_SENTENCE_BLANK",
+    sentence: "Please wr_p it u_.",
+    maskedWord: "wr_p u_"
+  }), [{ text: "Please wr_p it u_.", type: "text" }]);
+});
 
 const reviewPageSource = readFileSync(
   new URL("../src/features/vocabulary/pages/VocabularyExplorePage.tsx", import.meta.url),

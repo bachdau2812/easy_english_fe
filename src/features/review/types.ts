@@ -12,6 +12,13 @@ export type ExerciseType =
   | "VOCAB_SENTENCE_BLANK_TO_SOUND"
   | "LAT_LISTEN_AND_TYPE";
 
+export interface ReviewTargetSpan {
+  /** Zero-based, end-exclusive offsets in the unmodified example.sentence. */
+  start: number;
+  end: number;
+  text: string;
+}
+
 export interface VocabReviewQuizResponse {
   wordId?: UUID | null;
   userVocabId?: UUID | null;
@@ -28,6 +35,7 @@ export interface VocabReviewQuizResponse {
   maskedWord?: string | null;
   audioUrl?: string | null;
   missIndex?: number | null;
+  targetSpans?: ReviewTargetSpan[] | null;
   sentence?: string | null;
   trans?: string | null;
 }

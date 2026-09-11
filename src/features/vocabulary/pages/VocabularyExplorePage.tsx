@@ -24,9 +24,9 @@ import { reviewApi } from "../../review/api/reviewApi";
 import {
   getPlainReviewSentence,
   getReviewMeaningPresentation,
+  getReviewQuestionSentenceSegments,
   getReviewResultExamplePresentation,
   getReviewResultSoundUrl,
-  parseReviewSentenceMarkup,
   shouldIgnoreReviewResultEnter,
   splitReviewInlineFocus
 } from "../../review/reviewPresentation";
@@ -167,16 +167,24 @@ const getReviewQuestionMeaning = (question: VocabReviewQuizResponse) =>
     question.example?.trans
   ) ?? "No meaning was returned.";
 
-const renderReviewSentence = (sentence?: string | null) =>
-  parseReviewSentenceMarkup(sentence).map((segment, index) =>
-    segment.type === "highlight" ? (
+const renderReviewSentence = (question: VocabReviewQuizResponse) =>
+  getReviewQuestionSentenceSegments(question).map((segment, index) => {
+    if (segment.type === "blank") {
+      return <span
+        aria-label="Missing word"
+        className="vocab-review-sentence-blank"
+        key={`blank-${index}`}
+        role="img"
+      />;
+    }
+    return segment.type === "highlight" ? (
       <mark className="vocab-review-highlight" key={`highlight-${index}`}>
         {segment.text}
       </mark>
     ) : (
       <span key={`text-${index}`}>{segment.text}</span>
-    )
-  );
+    );
+  });
 
 const getReviewMetadataOptions = (metadata?: Record<number, string> | null) =>
   Object.entries(metadata ?? {})
@@ -461,7 +469,11 @@ const InlineReviewAnswer = ({
     });
 
   return (
-    <div className={`vocab-review-inline-fill ${className}`} aria-label={ariaLabel} role="group">
+    <div
+      className={`vocab-review-inline-fill ${className}`}
+      aria-label={ariaLabel}
+      role="group"
+    >
       {inlineFocus.focus ? (
         <>
           {inlineFocus.before ? (
@@ -2017,11 +2029,7 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
                   {currentReviewType === "VOCAB_SENTENCE_TO_MEANING" ? (
                     <div className="vocab-review-question">
                       <p className="vocab-review-prompt">
-                        {renderReviewSentence(
-                          currentReviewQuestion.sentence ??
-                            currentReviewQuestion.example?.sentence ??
-                            "Choose the sentence meaning."
-                        )}
+                        {renderReviewSentence(currentReviewQuestion)}
                       </p>
                       <div className="vocab-review-options">
                         {currentReviewMetadataOptions.map((option) => (
@@ -2042,11 +2050,7 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
                   {currentReviewType === "VOCAB_SENTENCE_BLANK_TO_SOUND" ? (
                     <div className="vocab-review-question">
                       <p className="vocab-review-prompt">
-                        {renderReviewSentence(
-                          currentReviewQuestion.sentence ??
-                            currentReviewQuestion.example?.sentence ??
-                            "Choose the missing sound."
-                        )}
+                        {renderReviewSentence(currentReviewQuestion)}
                       </p>
                       <div className="vocab-review-sound-options">
                         {currentReviewMetadataOptions.map((option, index) => (
@@ -2091,7 +2095,7 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
                   {currentReviewType === "VOCAB_CHOOSE_WORD_IN_SENTENCE_BLANK" ? (
                     <div className="vocab-review-question">
                       <p className="vocab-review-prompt">
-                        {renderReviewSentence(currentReviewQuestion.sentence ?? "Choose the missing word.")}
+                        {renderReviewSentence(currentReviewQuestion)}
                       </p>
                       {currentReviewSentenceMeaning ? (
                         <div className="vocab-review-meaning-reveal">

@@ -7963,6 +7963,16 @@ input {
   padding: 0;
 }
 
+.vocab-review-sentence-blank {
+  border-bottom: 2px solid #64748b;
+  display: inline-block;
+  height: 1.1em;
+  margin-inline: 0.2em;
+  vertical-align: baseline;
+  width: 6em;
+  max-width: 100%;
+}
+
 .vocab-review-word-prompt {
   align-items: center;
   background: #f8fafc;
