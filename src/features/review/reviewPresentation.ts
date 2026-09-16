@@ -115,7 +115,7 @@ export const getReviewMeaningPresentation = (
     selectedSense?.definition,
     isShortMeaningTranslated ? null : shortMeaning
   );
-  const vietnameseMeaning = translatedMeanings[0] ?? null;
+  const vietnameseMeaning = getFirstText(selectedSense?.trans?.definition);
 
   return {
     englishMeaning,

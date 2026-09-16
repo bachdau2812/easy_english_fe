@@ -250,7 +250,7 @@ test("exposes Vietnamese and English meanings with explicit localized fields", (
   });
 });
 
-test("treats a duplicated localized short meaning as hidden translation only", () => {
+test("shows the translated definition and suppresses a duplicated localized short meaning", () => {
   const presentation = getReviewMeaningPresentation({
     sense: {
       shortMeaning: "chất lỏng",
@@ -265,7 +265,7 @@ test("treats a duplicated localized short meaning as hidden translation only", (
   assert.deepEqual(presentation, {
     englishMeaning: null,
     hasAnyMeaning: true,
-    vietnameseMeaning: "chất lỏng"
+    vietnameseMeaning: "Một chất không rắn và có thể chảy."
   });
 });
 
