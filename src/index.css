@@ -518,6 +518,11 @@ input {
   width: min(100%, 1240px);
 }
 
+.guest-home main.guest-home__main--wide {
+  max-width: 1600px;
+  width: min(100%, 1600px);
+}
+
 .guest-hero {
   align-items: center;
   background:

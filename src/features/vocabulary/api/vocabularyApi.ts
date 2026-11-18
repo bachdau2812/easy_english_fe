@@ -8,7 +8,8 @@ import type {
   UserVocabularyInfoType,
   UserVocabularyRequest,
   UserVocabularyResponse,
-  UserVocabularySearchResponse
+  UserVocabularySearchResponse,
+  AllUserVocabularyResponse
 } from "../types";
 
 export const vocabularyApi = {
@@ -43,6 +44,11 @@ export const vocabularyApi = {
   },
   exportSavedVocabularies(langCode = "vi") {
     return apiClient.download("/user-vocabularies/export", {
+      query: { langCode }
+    });
+  },
+  getAllUserVocabularies(langCode = "vi") {
+    return apiClient.get<AllUserVocabularyResponse[]>("/user-vocabularies/all", {
       query: { langCode }
     });
   },

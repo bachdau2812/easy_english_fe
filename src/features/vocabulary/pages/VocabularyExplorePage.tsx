@@ -21,6 +21,7 @@ import { useRecordSearchHistory } from "../../search/hooks/useRecordSearchHistor
 import { statisticsApi } from "../../statistics/api/statisticsApi";
 import { UserVocabularyStatisticResponse, WrongVocabResponse } from "../../statistics/types";
 import { reviewApi } from "../../review/api/reviewApi";
+import { AllVocabularyReview } from "../../review/components/AllVocabularyReview";
 import {
   getPlainReviewSentence,
   getReviewMeaningPresentation,
@@ -552,7 +553,15 @@ const iconCycle: Array<"book" | "brain" | "globe" | "headphones" | "reading" | "
   "star"
 ];
 
-const ExploreChrome = ({ children, compactTitle }: { children: ReactNode; compactTitle?: string }) => {
+const ExploreChrome = ({
+  children,
+  compactTitle,
+  wideContent = false
+}: {
+  children: ReactNode;
+  compactTitle?: string;
+  wideContent?: boolean;
+}) => {
   const navigate = useNavigate();
   const recordSearchHistory = useRecordSearchHistory();
   const [isAccountOpen, setIsAccountOpen] = useState(false);
@@ -640,7 +649,7 @@ const ExploreChrome = ({ children, compactTitle }: { children: ReactNode; compac
           );
         }}
       />
-      <main>
+      <main className={wideContent ? "guest-home__main--wide" : ""}>
         {wordError ? (
           <div className="home-word-save-message" role="alert">
             {wordError}
@@ -663,9 +672,10 @@ export const VocabularyExplorePage = ({ mode }: VocabularyExplorePageProps) => {
   const auth = useAuth();
   const details = modeTitle[mode];
   const [isChildHeroCompact, setIsChildHeroCompact] = useState(false);
+  const [isAllReviewFocus, setIsAllReviewFocus] = useState(false);
 
   return (
-    <ExploreChrome compactTitle={details.title}>
+    <ExploreChrome compactTitle={details.title} wideContent={mode === "mine" && isAllReviewFocus}>
       <section
         className={`vocab-route-page vocab-route-page--nav-compact ${
           mode === "mine" && isChildHeroCompact ? "vocab-route-page--child-active" : ""
@@ -680,7 +690,12 @@ export const VocabularyExplorePage = ({ mode }: VocabularyExplorePageProps) => {
           <>
             {mode === "topics" ? <TopicGrid /> : null}
             {mode === "levels" ? <LevelWordBrowser /> : null}
-            {mode === "mine" ? <MyVocabularyPanel onActiveChange={setIsChildHeroCompact} /> : null}
+            {mode === "mine" ? (
+              <MyVocabularyPanel
+                onActiveChange={setIsChildHeroCompact}
+                onAllReviewFocusChange={setIsAllReviewFocus}
+              />
+            ) : null}
           </>
         )}
       </section>
@@ -1021,7 +1036,13 @@ const LevelWordBrowser = () => {
   );
 };
 
-const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolean) => void }) => {
+const MyVocabularyPanel = ({
+  onActiveChange,
+  onAllReviewFocusChange
+}: {
+  onActiveChange: (active: boolean) => void;
+  onAllReviewFocusChange: (active: boolean) => void;
+}) => {
   const auth = useAuth();
   const [activeSection, setActiveSection] = useState<MyVocabularySection | null>(null);
   const [selectedSavedLevel, setSelectedSavedLevel] = useState<number | null>(null);
@@ -1047,6 +1068,7 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
   const [pendingReviewReminderTotal, setPendingReviewReminderTotal] = useState(60);
   const [isReviewReminderPickerOpen, setIsReviewReminderPickerOpen] = useState(false);
   const [isReviewScreenOpen, setIsReviewScreenOpenState] = useState(false);
+  const [isAllVocabularyReviewOpen, setIsAllVocabularyReviewOpen] = useState(false);
   const [isReviewExitConfirmOpen, setIsReviewExitConfirmOpen] = useState(false);
   const [isReviewZeroGeneratedOpen, setIsReviewZeroGeneratedOpen] = useState(false);
   const isAdvancingReviewRef = useRef(false);
@@ -1374,13 +1396,24 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
     : null;
   const hasReviewSummaryItems = reviewSummaryItems.correct.length + reviewSummaryItems.wrong.length > 0;
   const shouldShowReviewSummaryPopup = isReviewSessionComplete && hasReviewSummaryItems && !reviewResultPopup;
-  const isReviewStandaloneVisible = activeSection === "review" && isReviewScreenOpen && (review.isPending || reviewQuestions.length > 0);
+  const isReviewStandaloneVisible = activeSection === "review" && (
+    isAllVocabularyReviewOpen || (isReviewScreenOpen && (review.isPending || reviewQuestions.length > 0))
+  );
 
   useEffect(() => {
     onActiveChange(Boolean(activeSection));
 
     return () => onActiveChange(false);
   }, [activeSection, onActiveChange]);
+
+  useEffect(() => {
+    onAllReviewFocusChange(isAllVocabularyReviewOpen);
+  }, [isAllVocabularyReviewOpen, onAllReviewFocusChange]);
+
+  useEffect(
+    () => () => onAllReviewFocusChange(false),
+    [onAllReviewFocusChange]
+  );
 
   useEffect(() => {
     reviewAudioPoolRef.current?.preload(
@@ -1809,7 +1842,7 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
               className={isReviewStandaloneVisible ? "vocab-review-screen" : "vocab-review-start"}
               ref={reviewScreenRef}
             >
-              {isReviewStandaloneVisible ? (
+              {isReviewStandaloneVisible && !isAllVocabularyReviewOpen ? (
                 <FloatingVocabularyLookup
                   anchorRef={reviewScreenRef}
                   languageCode="vi"
@@ -1817,11 +1850,13 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
                   userId={auth.userId}
                 />
               ) : null}
-              {isReviewStandaloneVisible ? (
+              {isReviewStandaloneVisible && !isAllVocabularyReviewOpen ? (
                 <div className="vocab-review-screen__header">
                   <div>
-                    <span>Review session</span>
-                    <strong>{review.isPending && reviewQuestions.length === 0 ? "Preparing your quiz" : "Focus mode"}</strong>
+                    {!isAllVocabularyReviewOpen ? <span>Review session</span> : null}
+                    {!isAllVocabularyReviewOpen ? (
+                      <strong>{review.isPending && reviewQuestions.length === 0 ? "Preparing your quiz" : "Focus mode"}</strong>
+                    ) : null}
                   </div>
                   <button onClick={() => setIsReviewExitConfirmOpen(true)} type="button">
                     <HomeIcon name="close" size={18} />
@@ -1830,7 +1865,7 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
                 </div>
               ) : null}
 
-              {review.isPending && reviewQuestions.length === 0 ? (
+              {!isAllVocabularyReviewOpen && review.isPending && reviewQuestions.length === 0 ? (
                 <div className="vocab-review-loading" role="status">
                   <span>
                     <HomeIcon name="brain" size={34} />
@@ -1934,6 +1969,19 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
                             {total}
                           </button>
                         ))}
+                        <button
+                          aria-label="Review all saved vocabulary"
+                          className="vocab-review-choice-all"
+                          disabled={review.isPending}
+                          onClick={() => {
+                            setReviewMessage(null);
+                            setIsReviewExitConfirmOpen(false);
+                            setIsAllVocabularyReviewOpen(true);
+                          }}
+                          type="button"
+                        >
+                          All
+                        </button>
                       </div>
                       <button disabled={review.isPending} onClick={() => review.mutate()} type="button">
                         {review.isPending ? "Generating..." : "Start review"}
@@ -1947,6 +1995,14 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
                     <span style={{ width: `${reviewProgressPercent}%` }} />
                   </div>
                 </div>
+              ) : null}
+
+              {isAllVocabularyReviewOpen && auth.userId ? (
+                <AllVocabularyReview
+                  key={auth.userId}
+                  onExitRequest={() => setIsReviewExitConfirmOpen(true)}
+                  userId={auth.userId}
+                />
               ) : null}
 
               {reviewMessage && !isReviewStandaloneVisible && reviewQuestions.length === 0 ? <p className="vocab-review-message">{reviewMessage}</p> : null}
@@ -2342,12 +2398,26 @@ const MyVocabularyPanel = ({ onActiveChange }: { onActiveChange: (active: boolea
                       <HomeIcon name="quiz" size={24} />
                     </span>
                     <h3>Exit review?</h3>
-                    <p>Your current quiz progress will be cleared and you will return to My Vocabulary.</p>
+                    <p>{isAllVocabularyReviewOpen
+                      ? "Your All session is saved on this device. You can continue it when you return."
+                      : "Your current quiz progress will be cleared and you will return to My Vocabulary."}</p>
                     <div>
                       <button onClick={() => setIsReviewExitConfirmOpen(false)} type="button">
                         Keep reviewing
                       </button>
-                      <button onClick={exitReviewSession} type="button">
+                      <button
+                        onClick={() => {
+                          if (isAllVocabularyReviewOpen) {
+                            setIsAllVocabularyReviewOpen(false);
+                            setIsReviewExitConfirmOpen(false);
+                            setActiveSection(null);
+                            return;
+                          }
+
+                          exitReviewSession();
+                        }}
+                        type="button"
+                      >
                         Exit review
                       </button>
                     </div>

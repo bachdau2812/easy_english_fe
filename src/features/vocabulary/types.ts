@@ -59,5 +59,16 @@ export interface UserVocabularySearchResponse {
   pos: string;
 }
 
+export interface AllUserVocabularyResponse {
+  meaning_practice: string | null;
+  word: string | null;
+  pos: string | null;
+  word_sense: string | null;
+  word_practice: string | null;
+  level: number | null;
+  langcode: string | null;
+  examples: string | null;
+}
+
 export type SavedVocabularyPageResponse = PageResponse<UserVocabularyResponse>;
 export type SavedVocabularyWordResponse = WordResponse;
