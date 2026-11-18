@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
-import type { ReactNode } from "react";
+import { useRef } from "react";
+import type { PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import { HomeIcon } from "../../home/components/HomeIcon";
-import { countAllVocabularyUnanswered, getAllVocabularyUserAnswer, allVocabularyColumnKeys } from "../allVocabularyReview";
+import { countAllVocabularyUnanswered, allVocabularyColumnKeys } from "../allVocabularyReview";
 import type { AllVocabularyColumnKey, AllVocabularyReviewItem } from "../allVocabularyReview";
 import { useAllVocabularyReviewSession } from "../hooks/useAllVocabularyReviewSession";
 import "./AllVocabularyReview.css";
@@ -29,6 +30,14 @@ export const AllVocabularyReview = ({
 }) => {
   const review = useAllVocabularyReviewSession(userId);
   const [isSubmitConfirmOpen, setIsSubmitConfirmOpen] = useState(false);
+  const resizingRef = useRef<{
+    column: AllVocabularyColumnKey;
+    pointerId: number;
+    startX: number;
+    startWidth: number;
+    currentWidth: number;
+  } | null>(null);
+  const tableColumnsRef = useRef(new Map<AllVocabularyColumnKey, HTMLTableColElement>());
   const session = review.session;
   const visibleColumns = session
     ? allVocabularyColumnKeys.filter((column) => session.visibleColumns[column])
@@ -42,6 +51,63 @@ export const AllVocabularyReview = ({
     : [];
   const unansweredCount = session ? countAllVocabularyUnanswered(session) : 0;
   const activeAnswerColumn = session?.mode === "word-to-meaning" ? "meaning_practice" : "word_practice";
+
+  const startColumnResize = (
+    event: ReactPointerEvent<HTMLSpanElement>,
+    column: AllVocabularyColumnKey
+  ) => {
+    if (!session) {
+      return;
+    }
+
+    event.preventDefault();
+    event.stopPropagation();
+    const width = session.columnWidths[column];
+    resizingRef.current = {
+      column,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startWidth: width,
+      currentWidth: width
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+
+  const moveColumnResize = (
+    event: ReactPointerEvent<HTMLSpanElement>,
+    column: AllVocabularyColumnKey
+  ) => {
+    const resize = resizingRef.current;
+    if (!resize || resize.column !== column || resize.pointerId !== event.pointerId) {
+      return;
+    }
+
+    const width = Math.round(Math.max(64, Math.min(1200, resize.startWidth + event.clientX - resize.startX)));
+    resize.currentWidth = width;
+    tableColumnsRef.current.get(column)?.style.setProperty("width", `${width}px`);
+  };
+
+  const finishColumnResize = (
+    event: ReactPointerEvent<HTMLSpanElement>,
+    column: AllVocabularyColumnKey,
+    cancelled = false
+  ) => {
+    const resize = resizingRef.current;
+    if (!resize || resize.column !== column || resize.pointerId !== event.pointerId) {
+      return;
+    }
+
+    if (cancelled) {
+      tableColumnsRef.current.get(column)?.style.setProperty("width", `${resize.startWidth}px`);
+    } else {
+      review.setColumnWidth(column, resize.currentWidth);
+    }
+
+    resizingRef.current = null;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+  };
 
   const renderFocusShell = (content: ReactNode, controls?: ReactNode) => (
     <section className="vocab-review-all">
@@ -62,7 +128,6 @@ export const AllVocabularyReview = ({
     }
 
     if (column === "meaning_practice" || column === "word_practice") {
-      const value = getAllVocabularyUserAnswer(session.answers[item.localId], session.mode === "word-to-meaning" ? "word-to-meaning" : "meaning-to-word");
       const cellValue = column === "meaning_practice"
         ? session.answers[item.localId]?.meaning_practice ?? ""
         : session.answers[item.localId]?.word_practice ?? "";
@@ -71,21 +136,14 @@ export const AllVocabularyReview = ({
         return <span className="vocab-review-all__saved-answer">{cellValue || "—"}</span>;
       }
 
-      return column === "meaning_practice" ? (
-        <textarea
-          aria-label={`Meaning practice for ${item.word ?? "vocabulary"}`}
-          onChange={(event) => review.setAnswer(item.localId, column, event.target.value)}
-          placeholder="Type the meaning"
-          rows={2}
-          value={value}
-        />
-      ) : (
+      return (
         <input
-          aria-label={`Word practice for ${item.word_sense ?? "vocabulary"}`}
+          aria-label={`${column === "meaning_practice" ? "Meaning" : "Word"} practice for ${item.word ?? "vocabulary"}`}
+          defaultValue={cellValue}
+          onBlur={review.refreshSessionView}
           onChange={(event) => review.setAnswer(item.localId, column, event.target.value)}
-          placeholder="Type the word"
+          placeholder={column === "meaning_practice" ? "Type the meaning" : "Type the word"}
           type="text"
-          value={value}
         />
       );
     }
@@ -218,8 +276,52 @@ export const AllVocabularyReview = ({
 
       <div className="vocab-review-all__table-wrap">
         <table>
+          <colgroup>
+            {visibleColumns.map((column) => (
+              <col
+                key={column}
+                ref={(node) => {
+                  if (node) {
+                    tableColumnsRef.current.set(column, node);
+                  } else {
+                    tableColumnsRef.current.delete(column);
+                  }
+                }}
+                style={{ width: `${session.columnWidths[column]}px` }}
+              />
+            ))}
+          </colgroup>
           <thead>
-            <tr>{visibleColumns.map((column) => <th key={column}>{columnLabels[column]}</th>)}</tr>
+            <tr>
+              {visibleColumns.map((column) => (
+                <th key={column} style={{ width: `${session.columnWidths[column]}px` }}>
+                  {columnLabels[column]}
+                  <span
+                    aria-label={`Resize ${columnLabels[column]} column`}
+                    aria-orientation="vertical"
+                    aria-valuemax={1200}
+                    aria-valuemin={64}
+                    aria-valuenow={session.columnWidths[column]}
+                    className="vocab-review-all__resize-handle"
+                    onKeyDown={(event) => {
+                      if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                        event.preventDefault();
+                        review.setColumnWidth(
+                          column,
+                          session.columnWidths[column] + (event.key === "ArrowRight" ? 16 : -16)
+                        );
+                      }
+                    }}
+                    onPointerCancel={(event) => finishColumnResize(event, column, true)}
+                    onPointerDown={(event) => startColumnResize(event, column)}
+                    onPointerMove={(event) => moveColumnResize(event, column)}
+                    onPointerUp={(event) => finishColumnResize(event, column)}
+                    role="separator"
+                    tabIndex={0}
+                  />
+                </th>
+              ))}
+            </tr>
           </thead>
           <tbody>
             {orderedItems.map((item) => (

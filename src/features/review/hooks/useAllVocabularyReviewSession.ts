@@ -4,6 +4,7 @@ import type { AllUserVocabularyResponse } from "../../vocabulary/types";
 import {
   calculateAllVocabularyReviewResult,
   createAllVocabularyReviewSession,
+  defaultAllVocabularyColumnWidths,
   setAllVocabularyPracticeMode,
   shuffleAllVocabularyOrder
 } from "../allVocabularyReview";
@@ -127,10 +128,18 @@ export const useAllVocabularyReviewSession = (userId: string) => {
           return deleteAllVocabularyReviewSession(userId).then(() => startNewSession());
         }
 
-        setSavedSession(storedSession);
-        if (storedSession.status === "submitted" && storedSession.result) {
-          sessionRef.current = storedSession;
-          setSession(storedSession);
+        const restoredSession: AllVocabularyReviewSession = {
+          ...storedSession,
+          columnWidths: {
+            ...defaultAllVocabularyColumnWidths,
+            ...storedSession.columnWidths
+          }
+        };
+
+        setSavedSession(restoredSession);
+        if (restoredSession.status === "submitted" && restoredSession.result) {
+          sessionRef.current = restoredSession;
+          setSession(restoredSession);
           setStage("submitted");
           return;
         }
@@ -201,19 +210,34 @@ export const useAllVocabularyReviewSession = (userId: string) => {
 
   const setAnswer = useCallback(
     (localId: string, column: "meaning_practice" | "word_practice", value: string) => {
-      updateSession((current) => ({
-        ...current,
+      const currentSession = sessionRef.current;
+      if (!currentSession || currentSession.status !== "draft") {
+        return;
+      }
+
+      const nextSession: AllVocabularyReviewSession = {
+        ...currentSession,
         answers: {
-          ...current.answers,
+          ...currentSession.answers,
           [localId]: {
-            ...current.answers[localId],
+            ...currentSession.answers[localId],
             [column]: value
           }
-        }
-      }));
+        },
+        updatedAt: new Date().toISOString()
+      };
+      sessionRef.current = nextSession;
+      scheduleSave(nextSession);
     },
-    [updateSession]
+    [scheduleSave]
   );
+
+  const refreshSessionView = useCallback(() => {
+    const currentSession = sessionRef.current;
+    if (currentSession) {
+      setSession({ ...currentSession, answers: { ...currentSession.answers } });
+    }
+  }, []);
 
   const setMode = useCallback(
     (mode: AllVocabularyPracticeMode) => {
@@ -229,6 +253,20 @@ export const useAllVocabularyReviewSession = (userId: string) => {
         visibleColumns: {
           ...current.visibleColumns,
           [column]: !current.visibleColumns[column]
+        }
+      }));
+    },
+    [updateSession]
+  );
+
+  const setColumnWidth = useCallback(
+    (column: AllVocabularyColumnKey, width: number) => {
+      const boundedWidth = Math.round(Math.max(64, Math.min(1200, width)));
+      updateSession((current) => ({
+        ...current,
+        columnWidths: {
+          ...current.columnWidths,
+          [column]: boundedWidth
         }
       }));
     },
@@ -280,7 +318,9 @@ export const useAllVocabularyReviewSession = (userId: string) => {
     savedSession,
     session,
     setAnswer,
+    setColumnWidth,
     setMode,
+    refreshSessionView,
     shuffleOrder,
     stage,
     startNewSession,

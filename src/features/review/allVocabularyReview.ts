@@ -15,6 +15,17 @@ export type AllVocabularyColumnKey = (typeof allVocabularyColumnKeys)[number];
 export type AllVocabularyPracticeMode = "word-to-meaning" | "meaning-to-word";
 export type AllVocabularySessionStatus = "draft" | "submitted";
 
+export const defaultAllVocabularyColumnWidths: Record<AllVocabularyColumnKey, number> = {
+  meaning_practice: 190,
+  word: 160,
+  pos: 90,
+  word_sense: 280,
+  word_practice: 190,
+  level: 76,
+  langcode: 90,
+  examples: 520
+};
+
 export interface AllVocabularyPracticeAnswers {
   meaning_practice: string;
   word_practice: string;
@@ -48,6 +59,7 @@ export interface AllVocabularyReviewSession {
   answers: Record<string, AllVocabularyPracticeAnswers>;
   mode: AllVocabularyPracticeMode;
   visibleColumns: Record<AllVocabularyColumnKey, boolean>;
+  columnWidths: Record<AllVocabularyColumnKey, number>;
   result?: AllVocabularyReviewResult;
   updatedAt: string;
 }
@@ -75,6 +87,7 @@ export const createAllVocabularyReviewSession = (
     ),
     mode: "word-to-meaning",
     visibleColumns: createVisibleColumns("word_sense"),
+    columnWidths: { ...defaultAllVocabularyColumnWidths },
     updatedAt: new Date().toISOString()
   };
 };

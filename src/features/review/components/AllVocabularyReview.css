@@ -303,8 +303,9 @@
 .vocab-review-all__table-wrap table {
   border-collapse: separate;
   border-spacing: 0;
-  min-width: 900px;
-  width: 100%;
+  min-width: 100%;
+  table-layout: fixed;
+  width: max-content;
 }
 
 .vocab-review-all__table-wrap th,
@@ -330,6 +331,38 @@
   z-index: 1;
 }
 
+.vocab-review-all__resize-handle {
+  bottom: 0;
+  cursor: col-resize;
+  position: absolute;
+  right: -4px;
+  top: 0;
+  touch-action: none;
+  user-select: none;
+  width: 9px;
+  z-index: 3;
+}
+
+.vocab-review-all__resize-handle::after {
+  background: #cbd5e1;
+  border-radius: 999px;
+  content: "";
+  inset: 8px 3px;
+  opacity: 0;
+  position: absolute;
+  transition: opacity 140ms ease, background 140ms ease;
+}
+
+.vocab-review-all__resize-handle:hover::after,
+.vocab-review-all__resize-handle:focus-visible::after {
+  background: #2563eb;
+  opacity: 1;
+}
+
+.vocab-review-all__resize-handle:focus-visible {
+  outline: none;
+}
+
 .vocab-review-all__table-wrap td {
   color: #23324a;
 }
@@ -351,32 +384,26 @@
   border-bottom: 0;
 }
 
-.vocab-review-all__table-wrap input,
-.vocab-review-all__table-wrap textarea {
+.vocab-review-all__table-wrap input {
   background: #fff;
   border: 1px solid #cbd5e1;
   border-radius: 7px;
   color: #172033;
   font: inherit;
-  min-width: 155px;
+  min-width: 0;
   padding: 8px 9px;
-  resize: vertical;
   width: 100%;
 }
 
-.vocab-review-all__table-wrap input:focus,
-.vocab-review-all__table-wrap textarea:focus {
+.vocab-review-all__table-wrap input:focus {
   border-color: #3b82f6;
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
   outline: 0;
 }
 
-.vocab-review-all__table-wrap textarea {
-  min-height: 56px;
-}
-
 .vocab-review-all__table-wrap .vocab-review-all__long-text {
-  min-width: 230px;
+  min-width: 0;
+  overflow-wrap: anywhere;
   white-space: pre-wrap;
 }
 
